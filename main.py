@@ -13,6 +13,11 @@ def main():
     root.title("Fără titlu - Notepad")
     root.geometry("800x600")
 
+    # Bara de stare de jos. O împachetăm prima, ca să rămână vizibilă
+    # chiar și când fereastra e micșorată.
+    status_bar = tk.Label(root, anchor="w", relief=tk.SUNKEN, padx=5)
+    status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
     # Bara de derulare verticală, lipită de marginea din dreapta
     scrollbar = tk.Scrollbar(root)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -34,6 +39,15 @@ def main():
         else:
             root.title(f"{current_path.name} - Notepad")
 
+    def update_status(event=None):
+        # Poziția cursorului vine ca text, de forma "linie.coloană", ex. "3.7"
+        line, column = text_area.index(tk.INSERT).split(".")
+        # Coloana din Tkinter începe de la 0; o afișăm de la 1, ca Notepad
+        column = int(column) + 1
+        # "end-1c" = tot textul, fără "\n"-ul pe care Tkinter îl adaugă la final
+        char_count = len(text_area.get("1.0", "end-1c"))
+        status_bar.config(text=f"Ln {line}, Col {column} | {char_count} caractere")
+
     def open_file():
         nonlocal current_path, current_newline
         filename = filedialog.askopenfilename(filetypes=FILE_TYPES)
@@ -51,6 +65,7 @@ def main():
         current_path = Path(filename)
         current_newline = newline
         update_title()
+        update_status()
 
     def save_to(path):
         nonlocal current_path
@@ -87,6 +102,11 @@ def main():
     file_menu.add_command(label="Save As...", command=save_file_as)
     menubar.add_cascade(label="File", menu=file_menu)
     root.config(menu=menubar)
+
+    # Actualizăm bara de stare după fiecare tastă și fiecare click
+    text_area.bind("<KeyRelease>", update_status)
+    text_area.bind("<ButtonRelease-1>", update_status)
+    update_status()  # o dată la pornire, ca bara să nu fie goală
 
     # Pornim bucla aplicației (ține fereastra deschisă)
     root.mainloop()
