@@ -34,6 +34,9 @@ def main():
     # Fișierul deschis acum (None = încă nesalvat) și terminația lui de linie
     current_path = None
     current_newline = "\r\n"
+    # Codificarea cu care salvăm. E o variabilă Tkinter, ca butoanele radio
+    # din meniul Codificare să arate și să schimbe singure valoarea ei.
+    current_encoding = tk.StringVar(value=file_io.DEFAULT_ENCODING)
 
     def update_title():
         if current_path is None:
@@ -48,7 +51,10 @@ def main():
         column = int(column) + 1
         # "end-1c" = tot textul, fără "\n"-ul pe care Tkinter îl adaugă la final
         char_count = len(text_area.get("1.0", "end-1c"))
-        status_bar.config(text=f"Ln {line}, Col {column} | {char_count} caractere")
+        status_bar.config(
+            text=f"Ln {line}, Col {column} | {char_count} caractere"
+            f" | {current_encoding.get()}"
+        )
 
     def open_file():
         nonlocal current_path, current_newline
@@ -57,8 +63,8 @@ def main():
             return  # utilizatorul a apăsat Cancel
 
         try:
-            text, newline = file_io.read_file(filename)
-        except (OSError, UnicodeDecodeError) as error:
+            text, newline, encoding = file_io.read_file(filename)
+        except OSError as error:
             messagebox.showerror("Eroare", f"Nu am putut deschide fișierul:\n{error}")
             return
 
@@ -68,6 +74,7 @@ def main():
         text_area.edit_reset()
         current_path = Path(filename)
         current_newline = newline
+        current_encoding.set(encoding)
         update_title()
         update_status()
 
@@ -76,7 +83,15 @@ def main():
         # "end-1c" = tot textul, fără "\n"-ul pe care Tkinter îl adaugă la final
         text = text_area.get("1.0", "end-1c")
         try:
-            file_io.write_file(path, text, current_newline)
+            file_io.write_file(path, text, current_newline, current_encoding.get())
+        except UnicodeEncodeError:
+            messagebox.showerror(
+                "Eroare",
+                "Textul conține caractere care nu pot fi salvate în "
+                f"{current_encoding.get()}.\n"
+                "Alege altă codificare din meniul Codificare.",
+            )
+            return
         except OSError as error:
             messagebox.showerror("Eroare", f"Nu am putut salva fișierul:\n{error}")
             return
@@ -306,6 +321,15 @@ def main():
     file_menu.add_command(label="Save", command=save_file)
     file_menu.add_command(label="Save As...", command=save_file_as)
     menubar.add_cascade(label="File", menu=file_menu)
+
+    # Meniul Codificare: alegi cu ce codificare se salvează fișierul.
+    # Butonul radio bifat urmează automat valoarea din current_encoding.
+    encoding_menu = tk.Menu(menubar, tearoff=0)
+    for name in file_io.ENCODINGS:
+        encoding_menu.add_radiobutton(
+            label=name, value=name, variable=current_encoding, command=update_status
+        )
+    menubar.add_cascade(label="Codificare", menu=encoding_menu)
     root.config(menu=menubar)
 
     # Actualizăm bara de stare după fiecare tastă și fiecare click
