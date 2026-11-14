@@ -134,7 +134,7 @@ def main():
             # Câte caractere sunt înainte de cursor = de unde începem căutarea
             start = len(text_area.get("1.0", tk.INSERT))
 
-            position = search.find_next(text, query, start, match_case.get())
+            position = search.find_next_wrap(text, query, start, match_case.get())
             if position is None:
                 messagebox.showinfo("Notepad", f'Nu găsesc "{query}"', parent=find_window)
                 return
