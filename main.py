@@ -1,9 +1,9 @@
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import file_io
 import search
+from document import Document
 
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
 
@@ -19,76 +19,46 @@ def main():
     status_bar = tk.Label(root, anchor="w", relief=tk.SUNKEN, padx=5)
     status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-    # Bara de derulare verticală, lipită de marginea din dreapta
-    scrollbar = tk.Scrollbar(root)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    # Zona de text, care ocupă tot restul ferestrei.
-    # undo=True pornește Ctrl+Z (anulează) și Ctrl+Y (refă).
-    text_area = tk.Text(root, yscrollcommand=scrollbar.set, undo=True)
-    text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-    # Legăm bara de derulare de zona de text
-    scrollbar.config(command=text_area.yview)
-
-    # Fișierul deschis acum (None = încă nesalvat) și terminația lui de linie
-    current_path = None
-    current_newline = "\r\n"
-    # Codificarea cu care salvăm. E o variabilă Tkinter, ca butoanele radio
-    # din meniul Codificare să arate și să schimbe singure valoarea ei.
-    current_encoding = tk.StringVar(value=file_io.DEFAULT_ENCODING)
+    # Documentul (zona de text cu bara de derulare), care ocupă tot restul ferestrei
+    doc = Document(root)
+    doc.frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     def update_title():
-        if current_path is None:
-            root.title("Fără titlu - Notepad")
-        else:
-            root.title(f"{current_path.name} - Notepad")
+        root.title(f"{doc.display_name()} - Notepad")
 
     def update_status(event=None):
         # Poziția cursorului vine ca text, de forma "linie.coloană", ex. "3.7"
-        line, column = text_area.index(tk.INSERT).split(".")
+        line, column = doc.text_area.index(tk.INSERT).split(".")
         # Coloana din Tkinter începe de la 0; o afișăm de la 1, ca Notepad
         column = int(column) + 1
-        # "end-1c" = tot textul, fără "\n"-ul pe care Tkinter îl adaugă la final
-        char_count = len(text_area.get("1.0", "end-1c"))
+        char_count = len(doc.get_text())
         status_bar.config(
             text=f"Ln {line}, Col {column} | {char_count} caractere"
-            f" | {current_encoding.get()}"
+            f" | {doc.encoding.get()}"
         )
 
     def open_file():
-        nonlocal current_path, current_newline
         filename = filedialog.askopenfilename(filetypes=FILE_TYPES)
         if not filename:
             return  # utilizatorul a apăsat Cancel
 
         try:
-            text, newline, encoding = file_io.read_file(filename)
+            doc.load(filename)
         except OSError as error:
             messagebox.showerror("Eroare", f"Nu am putut deschide fișierul:\n{error}")
             return
 
-        text_area.delete("1.0", tk.END)
-        text_area.insert("1.0", text)
-        # Golim istoricul Undo, ca Ctrl+Z să nu „anuleze” deschiderea fișierului
-        text_area.edit_reset()
-        current_path = Path(filename)
-        current_newline = newline
-        current_encoding.set(encoding)
         update_title()
         update_status()
 
     def save_to(path):
-        nonlocal current_path
-        # "end-1c" = tot textul, fără "\n"-ul pe care Tkinter îl adaugă la final
-        text = text_area.get("1.0", "end-1c")
         try:
-            file_io.write_file(path, text, current_newline, current_encoding.get())
+            doc.save(path)
         except UnicodeEncodeError:
             messagebox.showerror(
                 "Eroare",
                 "Textul conține caractere care nu pot fi salvate în "
-                f"{current_encoding.get()}.\n"
+                f"{doc.encoding.get()}.\n"
                 "Alege altă codificare din meniul Codificare.",
             )
             return
@@ -96,7 +66,6 @@ def main():
             messagebox.showerror("Eroare", f"Nu am putut salva fișierul:\n{error}")
             return
 
-        current_path = Path(path)
         update_title()
 
     def save_file_as():
@@ -108,17 +77,18 @@ def main():
         save_to(filename)
 
     def save_file():
-        if current_path is None:
+        if doc.path is None:
             save_file_as()
         else:
-            save_to(current_path)
+            save_to(doc.path)
 
     def find_and_select(query, match_case, parent):
         """Caută `query` de la cursor (cu reluare de la început) și selectează potrivirea.
 
         `parent` e fereastra peste care apare mesajul "Nu găsesc".
         """
-        text = text_area.get("1.0", "end-1c")
+        text_area = doc.text_area
+        text = doc.get_text()
         # Câte caractere sunt înainte de cursor = de unde începem căutarea
         start = len(text_area.get("1.0", tk.INSERT))
 
@@ -139,6 +109,7 @@ def main():
 
     def as_one_undo_step(action):
         """Rulează `action` astfel încât un singur Ctrl+Z să anuleze tot ce face."""
+        text_area = doc.text_area
         # Tkinter pune singur separatoare între ștergeri și inserări;
         # le oprim temporar și punem noi câte unul la început și la final.
         text_area.config(autoseparators=False)
@@ -241,13 +212,14 @@ def main():
             find_and_select(replace_find_entry.get(), match_case.get(), replace_window)
 
         def do_replace():
+            text_area = doc.text_area
             query = replace_find_entry.get()
             replacement = replacement_entry.get()
 
             # Înlocuim doar dacă e ceva selectat și selecția e chiar o potrivire.
             # Altfel nu dăm eroare: doar căutăm următoarea potrivire.
             if text_area.tag_ranges("sel"):
-                text = text_area.get("1.0", "end-1c")
+                text = doc.get_text()
                 sel_start = len(text_area.get("1.0", "sel.first"))
                 sel_length = len(text_area.get("sel.first", "sel.last"))
 
@@ -269,8 +241,9 @@ def main():
             do_find()
 
         def do_replace_all():
+            text_area = doc.text_area
             query = replace_find_entry.get()
-            text = text_area.get("1.0", "end-1c")
+            text = doc.get_text()
             cursor = len(text_area.get("1.0", tk.INSERT))
 
             new_text, count, new_cursor = search.replace_all(
@@ -323,33 +296,30 @@ def main():
     menubar.add_cascade(label="File", menu=file_menu)
 
     # Meniul Codificare: alegi cu ce codificare se salvează fișierul.
-    # Butonul radio bifat urmează automat valoarea din current_encoding.
+    # Butonul radio bifat urmează automat codificarea documentului.
     encoding_menu = tk.Menu(menubar, tearoff=0)
     for name in file_io.ENCODINGS:
         encoding_menu.add_radiobutton(
-            label=name, value=name, variable=current_encoding, command=update_status
+            label=name, value=name, variable=doc.encoding, command=update_status
         )
     menubar.add_cascade(label="Codificare", menu=encoding_menu)
     root.config(menu=menubar)
 
     # Actualizăm bara de stare după fiecare tastă și fiecare click
-    text_area.bind("<KeyRelease>", update_status)
-    text_area.bind("<ButtonRelease-1>", update_status)
+    doc.text_area.bind("<KeyRelease>", update_status)
+    doc.text_area.bind("<ButtonRelease-1>", update_status)
     update_status()  # o dată la pornire, ca bara să nu fie goală
 
     # Ctrl+F deschide căutarea. O legăm pe zona de text și returnăm "break",
     # pentru că Tkinter folosește deja Ctrl+F acolo (mută cursorul un caracter).
     # <Control-F> e varianta cu Caps Lock pornit.
-    text_area.bind("<Control-f>", open_find_window)
-    text_area.bind("<Control-F>", open_find_window)
+    doc.text_area.bind("<Control-f>", open_find_window)
+    doc.text_area.bind("<Control-F>", open_find_window)
 
     # Ctrl+H deschide înlocuirea. Tot "break", pentru că în zona de text
     # Tkinter folosește Ctrl+H ca Backspace.
-    text_area.bind("<Control-h>", open_replace_window)
-    text_area.bind("<Control-H>", open_replace_window)
-
-    # Selecția rămâne colorată chiar și când focusul e în fereastra de căutare
-    text_area.config(inactiveselectbackground=text_area.cget("selectbackground"))
+    doc.text_area.bind("<Control-h>", open_replace_window)
+    doc.text_area.bind("<Control-H>", open_replace_window)
 
     # Pornim bucla aplicației (ține fereastra deschisă)
     root.mainloop()
