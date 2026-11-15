@@ -8,6 +8,16 @@ from document import Document
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
 
 
+def make_x_image(color):
+    """O imagine 12x12, transparentă, cu un X de culoarea `color`."""
+    image = tk.PhotoImage(width=12, height=12)
+    # Colorăm pixel cu pixel cele două diagonale ale X-ului
+    for i in range(2, 10):
+        image.put(color, to=(i, i, i + 1, i + 1))  # diagonala \
+        image.put(color, to=(i, 11 - i, i + 1, 12 - i))  # diagonala /
+    return image
+
+
 def main():
     # Fereastra principală a aplicației
     root = tk.Tk()
@@ -19,9 +29,33 @@ def main():
     status_bar = tk.Label(root, anchor="w", relief=tk.SUNKEN, padx=5)
     status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
+    # Butonul X de pe file. ttk.Notebook nu are așa ceva, așa că:
+    # 1. desenăm două imagini mici cu un X (gri normal, roșu sub mouse);
+    # 2. facem din ele un „element” de stil numit "close";
+    # 3. îl punem în desenul fiecărei file, în dreapta numelui.
+    close_image = make_x_image("#808080")
+    close_image_hover = make_x_image("#c42b1c")
+
+    style = ttk.Style(root)
+    # "active" = mouse-ul e deasupra filei. padding = spațiu în stânga X-ului.
+    style.element_create(
+        "close", "image", close_image, ("active", close_image_hover),
+        padding=(6, 0, 0, 0), sticky="",
+    )
+    style.layout("Closable.TNotebook.Tab", [
+        ("Notebook.tab", {"sticky": "nswe", "children": [
+            ("Notebook.padding", {"side": "top", "sticky": "nswe", "children": [
+                ("Notebook.focus", {"side": "top", "sticky": "nswe", "children": [
+                    ("Notebook.label", {"side": "left", "sticky": ""}),
+                    ("close", {"side": "left", "sticky": ""}),
+                ]}),
+            ]}),
+        ]}),
+    ])
+
     # Filele: un Notebook care ocupă tot restul ferestrei.
     # Fiecare filă conține frame-ul unui Document.
-    notebook = ttk.Notebook(root)
+    notebook = ttk.Notebook(root, style="Closable.TNotebook")
     notebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     # Ținem minte ce Document e în fiecare filă.
@@ -352,17 +386,17 @@ def main():
         add_tab(Document(notebook))
         return "break"
 
-    def close_tab(event=None):
-        """Ctrl+W: închide fila curentă, după ce întreabă de salvare."""
-        doc = current_doc()
-
+    def close_doc(doc):
+        """Închide fila lui `doc`, după ce întreabă de salvare."""
         if doc.is_modified():
             # Da = True, Nu = False, Anulare = None
-            answer = messagebox.askyesnocancel("Notepad", "Salvezi modificările?")
+            answer = messagebox.askyesnocancel(
+                "Notepad", f'Salvezi modificările din "{doc.display_name()}"?'
+            )
             if answer is None:
-                return "break"  # Anulare: fila rămâne deschisă
+                return  # Anulare: fila rămâne deschisă
             if answer and not save_file(doc):
-                return "break"  # salvarea n-a reușit: nu pierdem textul
+                return  # salvarea n-a reușit: nu pierdem textul
 
         del documents[str(doc.frame)]
         notebook.forget(doc.frame)
@@ -371,7 +405,37 @@ def main():
         # Aplicația rămâne mereu cu cel puțin o filă
         if not notebook.tabs():
             new_tab()
+
+    def close_tab(event=None):
+        """Ctrl+W: închide fila curentă."""
+        close_doc(current_doc())
         return "break"
+
+    # Indexul filei al cărei X a fost apăsat (None = niciunul)
+    pressed_close_index = None
+
+    def on_tab_press(event):
+        """Click apăsat pe Notebook: dacă e pe un X, ținem minte fila."""
+        nonlocal pressed_close_index
+        if notebook.identify(event.x, event.y) == "close":
+            pressed_close_index = notebook.index(f"@{event.x},{event.y}")
+            # "break": fila nu devine activă doar pentru că am apăsat X-ul
+            return "break"
+
+    def on_tab_release(event):
+        """Click eliberat: închidem fila doar dacă mouse-ul e tot pe X-ul ei."""
+        nonlocal pressed_close_index
+        index = pressed_close_index
+        pressed_close_index = None
+        if index is None:
+            return  # apăsarea n-a fost pe un X
+
+        if (
+            notebook.identify(event.x, event.y) == "close"
+            and notebook.index(f"@{event.x},{event.y}") == index
+        ):
+            # notebook.tabs() dă numele frame-urilor, adică cheile din documents
+            close_doc(documents[str(notebook.tabs()[index])])
 
     def on_tab_changed(event):
         """Când se schimbă fila activă, totul trece pe documentul ei."""
@@ -405,6 +469,8 @@ def main():
     root.config(menu=menubar)
 
     notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
+    notebook.bind("<ButtonPress-1>", on_tab_press)
+    notebook.bind("<ButtonRelease-1>", on_tab_release)
     new_tab()  # prima filă, goală
 
     # Pornim bucla aplicației (ține fereastra deschisă)
