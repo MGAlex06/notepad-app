@@ -7,6 +7,21 @@ from document import Document
 
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
 
+# Scurtăturile care funcționează acum, afișate în Ajutor → Scurtături.
+# Primele patru le legăm noi în add_tab; restul vin gata făcute din Tkinter.
+SHORTCUTS = [
+    ("Ctrl+N", "Filă nouă"),
+    ("Ctrl+W", "Închide fila"),
+    ("Ctrl+F", "Caută"),
+    ("Ctrl+H", "Înlocuiește"),
+    ("Ctrl+Z", "Anulează"),
+    ("Ctrl+Y", "Refă"),
+    ("Ctrl+X", "Taie"),
+    ("Ctrl+C", "Copiază"),
+    ("Ctrl+V", "Lipește"),
+    ("Ctrl+A", "Selectează tot"),
+]
+
 
 def make_x_image(color):
     """O imagine 12x12, transparentă, cu un X de culoarea `color`."""
@@ -450,9 +465,54 @@ def main():
             encoding_menu.entryconfig(index, variable=doc.encoding)
         doc.text_area.focus_set()
 
-    # Meniul de sus, cu submeniul File
+    # Fereastra cu scurtături (None = nu e deschisă)
+    shortcuts_window = None
+
+    def show_shortcuts():
+        """Ajutor → Scurtături: o fereastră mică cu lista din SHORTCUTS."""
+        nonlocal shortcuts_window
+
+        # Dacă fereastra e deja deschisă, doar o aducem în față
+        if shortcuts_window is not None:
+            shortcuts_window.lift()
+            shortcuts_window.focus_set()
+            return
+
+        window = tk.Toplevel(root)
+        shortcuts_window = window
+        window.title("Scurtături de la tastatură")
+        window.transient(root)  # stă deasupra ferestrei principale
+        window.resizable(False, False)
+
+        # Câte un rând pentru fiecare scurtătură: tasta în stânga, ce face în dreapta
+        for row, (keys, description) in enumerate(SHORTCUTS):
+            tk.Label(window, text=keys, font=("Segoe UI", 9, "bold")).grid(
+                row=row, column=0, padx=(10, 20), pady=2, sticky="w"
+            )
+            tk.Label(window, text=description).grid(
+                row=row, column=1, padx=(0, 10), pady=2, sticky="w"
+            )
+
+        def close():
+            nonlocal shortcuts_window
+            window.destroy()
+            shortcuts_window = None
+
+        tk.Button(window, text="Închide", width=10, command=close).grid(
+            row=len(SHORTCUTS), column=0, columnspan=2, pady=10
+        )
+
+        # Butonul X din colț face același lucru ca "Închide"
+        window.protocol("WM_DELETE_WINDOW", close)
+
+    # Meniul de sus, cu submeniul File.
+    # `accelerator` doar afișează scurtătura în dreapta; tasta în sine
+    # funcționează prin bind-urile din add_tab.
     menubar = tk.Menu(root)
     file_menu = tk.Menu(menubar, tearoff=0)
+    file_menu.add_command(label="Filă nouă", command=new_tab, accelerator="Ctrl+N")
+    file_menu.add_command(label="Închide fila", command=close_tab, accelerator="Ctrl+W")
+    file_menu.add_separator()
     file_menu.add_command(label="Open...", command=open_file)
     file_menu.add_command(label="Save", command=lambda: save_file(current_doc()))
     file_menu.add_command(
@@ -466,6 +526,11 @@ def main():
     for name in file_io.ENCODINGS:
         encoding_menu.add_radiobutton(label=name, value=name, command=update_status)
     menubar.add_cascade(label="Codificare", menu=encoding_menu)
+
+    # Meniul Ajutor, ultimul din bară
+    help_menu = tk.Menu(menubar, tearoff=0)
+    help_menu.add_command(label="Scurtături de la tastatură...", command=show_shortcuts)
+    menubar.add_cascade(label="Ajutor", menu=help_menu)
     root.config(menu=menubar)
 
     notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
