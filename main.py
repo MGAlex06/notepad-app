@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 import file_io
 import search
@@ -19,14 +19,27 @@ def main():
     status_bar = tk.Label(root, anchor="w", relief=tk.SUNKEN, padx=5)
     status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-    # Documentul (zona de text cu bara de derulare), care ocupă tot restul ferestrei
-    doc = Document(root)
-    doc.frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    # Filele: un Notebook care ocupă tot restul ferestrei.
+    # Fiecare filă conține frame-ul unui Document.
+    notebook = ttk.Notebook(root)
+    notebook.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Ținem minte ce Document e în fiecare filă.
+    # Cheia e numele frame-ului, adică ce returnează notebook.select().
+    documents = {}
+
+    def current_doc():
+        """Documentul din fila activă."""
+        return documents[notebook.select()]
 
     def update_title():
-        root.title(f"{doc.display_name()} - Notepad")
+        root.title(f"{current_doc().display_name()} - Notepad")
+
+    def update_tab_title(doc):
+        notebook.tab(doc.frame, text=doc.display_name())
 
     def update_status(event=None):
+        doc = current_doc()
         # Poziția cursorului vine ca text, de forma "linie.coloană", ex. "3.7"
         line, column = doc.text_area.index(tk.INSERT).split(".")
         # Coloana din Tkinter începe de la 0; o afișăm de la 1, ca Notepad
@@ -42,16 +55,32 @@ def main():
         if not filename:
             return  # utilizatorul a apăsat Cancel
 
+        # Dacă fila curentă e goală și nesalvată, o folosim pe ea.
+        # Altfel facem un document nou, pe care îl punem într-o filă
+        # doar dacă fișierul s-a încărcat cu succes.
+        reuse_current = current_doc().is_blank()
+        if reuse_current:
+            doc = current_doc()
+        else:
+            doc = Document(notebook)
+
         try:
             doc.load(filename)
         except OSError as error:
+            if not reuse_current:
+                doc.frame.destroy()  # documentul nou nu mai e necesar
             messagebox.showerror("Eroare", f"Nu am putut deschide fișierul:\n{error}")
             return
 
-        update_title()
-        update_status()
+        if reuse_current:
+            update_tab_title(doc)
+            update_title()
+            update_status()
+        else:
+            add_tab(doc)  # selectarea filei noi actualizează titlul și bara de stare
 
-    def save_to(path):
+    def save_to(doc, path):
+        """Salvează `doc` în `path`. Returnează True dacă a reușit."""
         try:
             doc.save(path)
         except UnicodeEncodeError:
@@ -61,32 +90,36 @@ def main():
                 f"{doc.encoding.get()}.\n"
                 "Alege altă codificare din meniul Codificare.",
             )
-            return
+            return False
         except OSError as error:
             messagebox.showerror("Eroare", f"Nu am putut salva fișierul:\n{error}")
-            return
+            return False
 
+        update_tab_title(doc)
         update_title()
+        return True
 
-    def save_file_as():
+    def save_file_as(doc):
+        """Întreabă unde să salveze `doc`. Returnează True dacă s-a salvat."""
         filename = filedialog.asksaveasfilename(
             defaultextension=".txt", filetypes=FILE_TYPES
         )
         if not filename:
-            return  # utilizatorul a apăsat Cancel
-        save_to(filename)
+            return False  # utilizatorul a apăsat Cancel
+        return save_to(doc, filename)
 
-    def save_file():
+    def save_file(doc):
+        """Salvează `doc` (cu Save As dacă n-are încă fișier). True dacă a reușit."""
         if doc.path is None:
-            save_file_as()
-        else:
-            save_to(doc.path)
+            return save_file_as(doc)
+        return save_to(doc, doc.path)
 
     def find_and_select(query, match_case, parent):
         """Caută `query` de la cursor (cu reluare de la început) și selectează potrivirea.
 
         `parent` e fereastra peste care apare mesajul "Nu găsesc".
         """
+        doc = current_doc()
         text_area = doc.text_area
         text = doc.get_text()
         # Câte caractere sunt înainte de cursor = de unde începem căutarea
@@ -109,7 +142,7 @@ def main():
 
     def as_one_undo_step(action):
         """Rulează `action` astfel încât un singur Ctrl+Z să anuleze tot ce face."""
-        text_area = doc.text_area
+        text_area = current_doc().text_area
         # Tkinter pune singur separatoare între ștergeri și inserări;
         # le oprim temporar și punem noi câte unul la început și la final.
         text_area.config(autoseparators=False)
@@ -212,6 +245,7 @@ def main():
             find_and_select(replace_find_entry.get(), match_case.get(), replace_window)
 
         def do_replace():
+            doc = current_doc()
             text_area = doc.text_area
             query = replace_find_entry.get()
             replacement = replacement_entry.get()
@@ -241,6 +275,7 @@ def main():
             do_find()
 
         def do_replace_all():
+            doc = current_doc()
             text_area = doc.text_area
             query = replace_find_entry.get()
             text = doc.get_text()
@@ -287,39 +322,90 @@ def main():
         replace_find_entry.focus_set()
         return "break"
 
+    def add_tab(doc):
+        """Pune `doc` într-o filă nouă, îi leagă tastele și o face fila activă."""
+        notebook.add(doc.frame, text=doc.display_name())
+        documents[str(doc.frame)] = doc
+
+        text_area = doc.text_area
+        # Actualizăm bara de stare după fiecare tastă și fiecare click
+        text_area.bind("<KeyRelease>", update_status)
+        text_area.bind("<ButtonRelease-1>", update_status)
+
+        # Scurtăturile le legăm pe zona de text și returnăm "break", ca
+        # Tkinter să nu mai facă și acțiunea lui implicită (de exemplu Ctrl+F
+        # mută cursorul un caracter, iar Ctrl+H e Backspace).
+        # Varianta cu literă mare e pentru când Caps Lock e pornit.
+        text_area.bind("<Control-f>", open_find_window)
+        text_area.bind("<Control-F>", open_find_window)
+        text_area.bind("<Control-h>", open_replace_window)
+        text_area.bind("<Control-H>", open_replace_window)
+        text_area.bind("<Control-n>", new_tab)
+        text_area.bind("<Control-N>", new_tab)
+        text_area.bind("<Control-w>", close_tab)
+        text_area.bind("<Control-W>", close_tab)
+
+        notebook.select(doc.frame)
+
+    def new_tab(event=None):
+        """Ctrl+N: deschide o filă nouă, goală."""
+        add_tab(Document(notebook))
+        return "break"
+
+    def close_tab(event=None):
+        """Ctrl+W: închide fila curentă, după ce întreabă de salvare."""
+        doc = current_doc()
+
+        if doc.is_modified():
+            # Da = True, Nu = False, Anulare = None
+            answer = messagebox.askyesnocancel("Notepad", "Salvezi modificările?")
+            if answer is None:
+                return "break"  # Anulare: fila rămâne deschisă
+            if answer and not save_file(doc):
+                return "break"  # salvarea n-a reușit: nu pierdem textul
+
+        del documents[str(doc.frame)]
+        notebook.forget(doc.frame)
+        doc.frame.destroy()
+
+        # Aplicația rămâne mereu cu cel puțin o filă
+        if not notebook.tabs():
+            new_tab()
+        return "break"
+
+    def on_tab_changed(event):
+        """Când se schimbă fila activă, totul trece pe documentul ei."""
+        if not notebook.select():
+            return  # nu mai e nicio filă (doar o clipă, la închiderea ultimei)
+
+        doc = current_doc()
+        update_title()
+        update_status()
+        # Butoanele radio din Codificare arată acum codificarea acestui document
+        for index in range(len(file_io.ENCODINGS)):
+            encoding_menu.entryconfig(index, variable=doc.encoding)
+        doc.text_area.focus_set()
+
     # Meniul de sus, cu submeniul File
     menubar = tk.Menu(root)
     file_menu = tk.Menu(menubar, tearoff=0)
     file_menu.add_command(label="Open...", command=open_file)
-    file_menu.add_command(label="Save", command=save_file)
-    file_menu.add_command(label="Save As...", command=save_file_as)
+    file_menu.add_command(label="Save", command=lambda: save_file(current_doc()))
+    file_menu.add_command(
+        label="Save As...", command=lambda: save_file_as(current_doc())
+    )
     menubar.add_cascade(label="File", menu=file_menu)
 
     # Meniul Codificare: alegi cu ce codificare se salvează fișierul.
-    # Butonul radio bifat urmează automat codificarea documentului.
+    # Variabila butoanelor radio o setăm în on_tab_changed, pe documentul activ.
     encoding_menu = tk.Menu(menubar, tearoff=0)
     for name in file_io.ENCODINGS:
-        encoding_menu.add_radiobutton(
-            label=name, value=name, variable=doc.encoding, command=update_status
-        )
+        encoding_menu.add_radiobutton(label=name, value=name, command=update_status)
     menubar.add_cascade(label="Codificare", menu=encoding_menu)
     root.config(menu=menubar)
 
-    # Actualizăm bara de stare după fiecare tastă și fiecare click
-    doc.text_area.bind("<KeyRelease>", update_status)
-    doc.text_area.bind("<ButtonRelease-1>", update_status)
-    update_status()  # o dată la pornire, ca bara să nu fie goală
-
-    # Ctrl+F deschide căutarea. O legăm pe zona de text și returnăm "break",
-    # pentru că Tkinter folosește deja Ctrl+F acolo (mută cursorul un caracter).
-    # <Control-F> e varianta cu Caps Lock pornit.
-    doc.text_area.bind("<Control-f>", open_find_window)
-    doc.text_area.bind("<Control-F>", open_find_window)
-
-    # Ctrl+H deschide înlocuirea. Tot "break", pentru că în zona de text
-    # Tkinter folosește Ctrl+H ca Backspace.
-    doc.text_area.bind("<Control-h>", open_replace_window)
-    doc.text_area.bind("<Control-H>", open_replace_window)
+    notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
+    new_tab()  # prima filă, goală
 
     # Pornim bucla aplicației (ține fereastra deschisă)
     root.mainloop()

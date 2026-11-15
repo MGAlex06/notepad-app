@@ -48,6 +48,15 @@ class Document:
             return "Fără titlu"
         return self.path.name
 
+    def is_modified(self):
+        """True dacă textul s-a schimbat de la ultima deschidere sau salvare."""
+        # Tkinter ține singur acest „steag”: îl pune pe True la orice modificare
+        return self.text_area.edit_modified()
+
+    def is_blank(self):
+        """True dacă documentul e gol și n-a fost niciodată salvat."""
+        return self.path is None and self.get_text() == ""
+
     def get_text(self):
         """Tot textul din document."""
         # "end-1c" = tot textul, fără "\n"-ul pe care Tkinter îl adaugă la final
@@ -67,6 +76,8 @@ class Document:
         self.path = Path(path)
         self.newline = newline
         self.encoding.set(encoding)
+        # Textul tocmai a fost încărcat, deci nu are modificări nesalvate
+        self.text_area.edit_modified(False)
 
     def save(self, path):
         """Salvează documentul în `path`, cu terminația și codificarea lui.
@@ -76,3 +87,5 @@ class Document:
         """
         file_io.write_file(path, self.get_text(), self.newline, self.encoding.get())
         self.path = Path(path)
+        # Tot ce era în document e acum salvat pe disc
+        self.text_area.edit_modified(False)

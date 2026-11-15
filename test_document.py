@@ -76,6 +76,38 @@ def test_save_uses_newline_and_encoding_and_sets_path(root, tmp_path):
     assert doc.path == path
 
 
+def test_new_document_is_blank_and_not_modified(root):
+    doc = Document(root)
+    assert doc.is_blank()
+    assert not doc.is_modified()
+
+
+def test_typing_marks_document_modified(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "ceva")
+    assert doc.is_modified()
+    assert not doc.is_blank()
+
+
+def test_load_clears_modified_flag(root, tmp_path):
+    path = tmp_path / "nota.txt"
+    path.write_bytes(b"continut")
+
+    doc = Document(root)
+    doc.load(path)
+
+    assert not doc.is_modified()
+    assert not doc.is_blank()
+
+
+def test_save_clears_modified_flag(root, tmp_path):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "ceva")
+    doc.save(tmp_path / "salvat.txt")
+
+    assert not doc.is_modified()
+
+
 def test_save_failure_keeps_path(root, tmp_path):
     doc = Document(root)
     doc.text_area.insert("1.0", "emoji 😀")
