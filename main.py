@@ -8,10 +8,13 @@ from document import Document
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
 
 # Scurtăturile care funcționează acum, afișate în Ajutor → Scurtături.
-# Primele patru le legăm noi în add_tab; restul vin gata făcute din Tkinter.
+# Primele șapte le legăm noi în add_tab; restul vin gata făcute din Tkinter.
 SHORTCUTS = [
     ("Ctrl+N", "Filă nouă"),
     ("Ctrl+W", "Închide fila"),
+    ("Ctrl+O", "Deschide"),
+    ("Ctrl+S", "Salvează"),
+    ("Ctrl+Shift+S", "Salvează ca"),
     ("Ctrl+F", "Caută"),
     ("Ctrl+H", "Înlocuiește"),
     ("Ctrl+Z", "Anulează"),
@@ -393,6 +396,15 @@ def main():
         text_area.bind("<Control-N>", new_tab)
         text_area.bind("<Control-w>", close_tab)
         text_area.bind("<Control-W>", close_tab)
+        text_area.bind("<Control-o>", open_shortcut)
+        text_area.bind("<Control-O>", open_shortcut)
+        text_area.bind("<Control-s>", save_shortcut)
+        text_area.bind("<Control-S>", save_shortcut)
+        # Cu Caps Lock, Ctrl+S dă tot "S" mare, ca și Ctrl+Shift+S.
+        # Legăm Save As explicit cu Shift: Tkinter alege bind-ul cel mai
+        # precis, deci Ctrl+Shift+S → Save As, iar Caps Lock + Ctrl+S → Save.
+        text_area.bind("<Control-Shift-S>", save_as_shortcut)
+        text_area.bind("<Control-Shift-s>", save_as_shortcut)
 
         notebook.select(doc.frame)
 
@@ -424,6 +436,21 @@ def main():
     def close_tab(event=None):
         """Ctrl+W: închide fila curentă."""
         close_doc(current_doc())
+        return "break"
+
+    def open_shortcut(event=None):
+        """Ctrl+O: deschide un fișier."""
+        open_file()
+        return "break"
+
+    def save_shortcut(event=None):
+        """Ctrl+S: salvează fila activă."""
+        save_file(current_doc())
+        return "break"
+
+    def save_as_shortcut(event=None):
+        """Ctrl+Shift+S: salvează fila activă sub alt nume."""
+        save_file_as(current_doc())
         return "break"
 
     # Indexul filei al cărei X a fost apăsat (None = niciunul)
@@ -513,10 +540,10 @@ def main():
     file_menu.add_command(label="Filă nouă", command=new_tab, accelerator="Ctrl+N")
     file_menu.add_command(label="Închide fila", command=close_tab, accelerator="Ctrl+W")
     file_menu.add_separator()
-    file_menu.add_command(label="Open...", command=open_file)
-    file_menu.add_command(label="Save", command=lambda: save_file(current_doc()))
+    file_menu.add_command(label="Open...", command=open_shortcut, accelerator="Ctrl+O")
+    file_menu.add_command(label="Save", command=save_shortcut, accelerator="Ctrl+S")
     file_menu.add_command(
-        label="Save As...", command=lambda: save_file_as(current_doc())
+        label="Save As...", command=save_as_shortcut, accelerator="Ctrl+Shift+S"
     )
     menubar.add_cascade(label="File", menu=file_menu)
 
