@@ -195,7 +195,10 @@ def main():
         text_area.tag_remove("sel", "1.0", tk.END)  # ștergem selecția veche
         text_area.tag_add("sel", match_start, match_end)  # selectăm potrivirea
         text_area.mark_set(tk.INSERT, match_end)  # următoarea căutare pornește de aici
-        text_area.see(match_start)  # derulăm ca potrivirea să fie vizibilă
+        # see() arată doar un caracter: întâi sfârșitul, apoi începutul,
+        # ca să se vadă tot cuvântul (sau măcar începutul, dacă nu încape).
+        text_area.see(match_end)
+        text_area.see(match_start)
         update_status()
 
     def as_one_undo_step(action):
