@@ -25,6 +25,18 @@ def test_new_document_defaults(root):
     assert doc.get_text() == ""
 
 
+def test_set_word_wrap(root):
+    doc = Document(root)
+
+    doc.set_word_wrap(False)
+    assert doc.text_area.cget("wrap") == "none"
+    assert doc.xscrollbar.winfo_manager() == "pack"  # bara orizontală e afișată
+
+    doc.set_word_wrap(True)
+    assert doc.text_area.cget("wrap") == "word"
+    assert doc.xscrollbar.winfo_manager() == ""  # bara orizontală e ascunsă
+
+
 def test_load_reads_text_newline_and_encoding(root, tmp_path):
     path = tmp_path / "nota.txt"
     path.write_bytes(b"\xef\xbb\xbfunu\r\ndoi")  # UTF-8 cu BOM, terminații Windows

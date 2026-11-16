@@ -82,6 +82,10 @@ def main():
     # Cheia e numele frame-ului, adică ce returnează notebook.select().
     documents = {}
 
+    # Încadrarea textului (View → Încadrare text): o singură setare
+    # pentru toate filele. True = pornită, ca la Notepad.
+    word_wrap = tk.BooleanVar(master=root, value=True)
+
     def current_doc():
         """Documentul din fila activă."""
         return documents[notebook.select()]
@@ -380,6 +384,7 @@ def main():
         """Pune `doc` într-o filă nouă, îi leagă tastele și o face fila activă."""
         notebook.add(doc.frame, text=doc.display_name())
         documents[str(doc.frame)] = doc
+        doc.set_word_wrap(word_wrap.get())  # fila nouă primește setarea curentă
 
         text_area = doc.text_area
         # Actualizăm bara de stare după fiecare tastă și fiecare click
@@ -505,6 +510,12 @@ def main():
             encoding_menu.entryconfig(index, variable=doc.encoding)
         doc.text_area.focus_set()
 
+    def toggle_word_wrap():
+        """View → Încadrare text: aplică noua setare tuturor filelor deschise."""
+        # Bifa a schimbat deja singură valoarea lui word_wrap
+        for doc in documents.values():
+            doc.set_word_wrap(word_wrap.get())
+
     # Fereastra cu scurtături (None = nu e deschisă)
     shortcuts_window = None
 
@@ -566,6 +577,13 @@ def main():
     for name in file_io.ENCODINGS:
         encoding_menu.add_radiobutton(label=name, value=name, command=update_status)
     menubar.add_cascade(label="Codificare", menu=encoding_menu)
+
+    # Meniul View: opțiunea bifabilă de încadrare a textului
+    view_menu = tk.Menu(menubar, tearoff=0)
+    view_menu.add_checkbutton(
+        label="Încadrare text", variable=word_wrap, command=toggle_word_wrap
+    )
+    menubar.add_cascade(label="View", menu=view_menu)
 
     # Meniul Ajutor, ultimul din bară
     help_menu = tk.Menu(menubar, tearoff=0)

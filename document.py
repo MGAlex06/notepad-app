@@ -19,15 +19,25 @@ class Document:
         self.scrollbar = tk.Scrollbar(self.frame)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        # Bara de derulare orizontală. O creăm acum, dar o afișăm doar
+        # când încadrarea textului e oprită (vezi set_word_wrap).
+        self.xscrollbar = tk.Scrollbar(self.frame, orient=tk.HORIZONTAL)
+
         # Zona de text, care ocupă tot restul.
         # undo=True pornește Ctrl+Z (anulează) și Ctrl+Y (refă).
+        # wrap=tk.WORD rupe rândurile lungi la cuvinte, ca Notepad.
         self.text_area = tk.Text(
-            self.frame, yscrollcommand=self.scrollbar.set, undo=True
+            self.frame,
+            yscrollcommand=self.scrollbar.set,
+            xscrollcommand=self.xscrollbar.set,
+            undo=True,
+            wrap=tk.WORD,
         )
         self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Legăm bara de derulare de zona de text
+        # Legăm barele de derulare de zona de text
         self.scrollbar.config(command=self.text_area.yview)
+        self.xscrollbar.config(command=self.text_area.xview)
 
         # Selecția rămâne colorată chiar și când focusul e în altă fereastră
         # (de exemplu în fereastra de căutare)
@@ -47,6 +57,17 @@ class Document:
         if self.path is None:
             return "Fără titlu"
         return self.path.name
+
+    def set_word_wrap(self, enabled):
+        """Pornește (True) sau oprește (False) încadrarea textului în fereastră."""
+        if enabled:
+            self.text_area.config(wrap=tk.WORD)
+            self.xscrollbar.pack_forget()  # ascundem bara orizontală
+        else:
+            # Rândurile nu se mai rup, deci avem nevoie de bara orizontală.
+            # before=self.text_area o pune sub zona de text, nu lângă ea.
+            self.text_area.config(wrap=tk.NONE)
+            self.xscrollbar.pack(side=tk.BOTTOM, fill=tk.X, before=self.text_area)
 
     def is_modified(self):
         """True dacă textul s-a schimbat de la ultima deschidere sau salvare."""
