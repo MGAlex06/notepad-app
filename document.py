@@ -17,6 +17,14 @@ def gutter_width(line_count, digit_width, padding):
     return digits * digit_width + 2 * padding
 
 
+def format_timestamp(moment):
+    """Data și ora ca text, de forma "HH:MM ZZ.LL.AAAA" (ex. "14:49 16.11.2026").
+
+    `moment` e un obiect datetime. %H, %M, %d, %m pun mereu două cifre (09:05).
+    """
+    return moment.strftime("%H:%M %d.%m.%Y")
+
+
 class Document:
     """Un document deschis: zona de text, bara de derulare și datele fișierului.
 

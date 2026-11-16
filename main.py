@@ -1,16 +1,17 @@
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 import file_io
 import search
 import session
-from document import Document
+from document import Document, format_timestamp
 
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
 
 # Scurtăturile care funcționează acum, afișate în Ajutor → Scurtături.
-# Primele opt le legăm noi în add_tab; restul vin gata făcute din Tkinter.
+# Primele nouă le legăm noi în add_tab; restul vin gata făcute din Tkinter.
 SHORTCUTS = [
     ("Ctrl+N", "Filă nouă"),
     ("Ctrl+W", "Închide fila"),
@@ -20,6 +21,7 @@ SHORTCUTS = [
     ("Ctrl+F", "Caută"),
     ("Ctrl+H", "Înlocuiește"),
     ("Ctrl+G", "Salt la linie"),
+    ("F5", "Inserează data și ora"),
     ("Ctrl+Z", "Anulează"),
     ("Ctrl+Y", "Refă"),
     ("Ctrl+X", "Taie"),
@@ -216,6 +218,24 @@ def main():
         text_area.config(autoseparators=True)
         # Textul s-a schimbat din cod, nu de la tastatură: redesenăm numerele
         current_doc().schedule_line_numbers()
+
+    def insert_timestamp(event=None):
+        """F5: inserează data și ora la cursor (înlocuiește selecția, dacă există)."""
+        text_area = current_doc().text_area
+        stamp = format_timestamp(datetime.now())
+
+        def insert_stamp():
+            if text_area.tag_ranges("sel"):  # e ceva selectat: îl înlocuim
+                start = text_area.index("sel.first")
+                text_area.delete("sel.first", "sel.last")
+                text_area.mark_set(tk.INSERT, start)
+            text_area.insert(tk.INSERT, stamp)
+
+        as_one_undo_step(insert_stamp)  # un singur Ctrl+Z anulează tot
+        text_area.see(tk.INSERT)  # derulăm ca textul nou să se vadă
+        update_title()
+        update_status()
+        return "break"
 
     # Fereastra de căutare (None = nu e deschisă)
     find_window = None
@@ -478,6 +498,7 @@ def main():
         text_area.bind("<Control-H>", open_replace_window)
         text_area.bind("<Control-g>", open_goto_window)
         text_area.bind("<Control-G>", open_goto_window)
+        text_area.bind("<F5>", insert_timestamp)
         text_area.bind("<Control-n>", new_tab)
         text_area.bind("<Control-N>", new_tab)
         text_area.bind("<Control-w>", close_tab)
@@ -666,6 +687,10 @@ def main():
     )
     edit_menu.add_command(
         label="Salt la linie...", command=open_goto_window, accelerator="Ctrl+G"
+    )
+    edit_menu.add_separator()
+    edit_menu.add_command(
+        label="Dată și oră", command=insert_timestamp, accelerator="F5"
     )
     menubar.add_cascade(label="Editare", menu=edit_menu)
 

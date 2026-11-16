@@ -1,8 +1,9 @@
 import tkinter as tk
+from datetime import datetime
 
 import pytest
 
-from document import Document, gutter_width
+from document import Document, format_timestamp, gutter_width
 
 
 @pytest.fixture(scope="module")
@@ -195,3 +196,19 @@ def test_line_numbers_do_not_touch_undo(root, tmp_path):
     assert not doc.is_modified()
     with pytest.raises(tk.TclError):
         doc.text_area.edit_undo()  # nimic de anulat
+
+
+def test_format_timestamp_fixed_date():
+    assert format_timestamp(datetime(2026, 11, 16, 14, 49)) == "14:49 16.11.2026"
+
+
+def test_format_timestamp_single_digit_time():
+    assert format_timestamp(datetime(2026, 11, 16, 9, 5)) == "09:05 16.11.2026"
+
+
+def test_format_timestamp_single_digit_day_month():
+    assert format_timestamp(datetime(2026, 2, 3, 10, 30)) == "10:30 03.02.2026"
+
+
+def test_format_timestamp_end_of_year():
+    assert format_timestamp(datetime(2026, 12, 31, 23, 59)) == "23:59 31.12.2026"
