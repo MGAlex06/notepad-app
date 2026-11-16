@@ -86,6 +86,8 @@ def main():
     # Încadrarea textului (View → Încadrare text): o singură setare
     # pentru toate filele. True = pornită, ca la Notepad.
     word_wrap = tk.BooleanVar(master=root, value=True)
+    # Numerele de linie (View → Numere de linie): tot o setare pentru toate filele
+    line_numbers = tk.BooleanVar(master=root, value=True)
 
     def current_doc():
         """Documentul din fila activă."""
@@ -212,6 +214,8 @@ def main():
         action()
         text_area.edit_separator()
         text_area.config(autoseparators=True)
+        # Textul s-a schimbat din cod, nu de la tastatură: redesenăm numerele
+        current_doc().schedule_line_numbers()
 
     # Fereastra de căutare (None = nu e deschisă)
     find_window = None
@@ -457,6 +461,7 @@ def main():
         notebook.add(doc.frame, text=doc.display_name())
         documents[str(doc.frame)] = doc
         doc.set_word_wrap(word_wrap.get())  # fila nouă primește setarea curentă
+        doc.set_line_numbers(line_numbers.get())
 
         text_area = doc.text_area
         # Actualizăm bara de stare după fiecare tastă și fiecare click
@@ -590,6 +595,11 @@ def main():
         for doc in documents.values():
             doc.set_word_wrap(word_wrap.get())
 
+    def toggle_line_numbers():
+        """View → Numere de linie: aplică noua setare tuturor filelor deschise."""
+        for doc in documents.values():
+            doc.set_line_numbers(line_numbers.get())
+
     # Fereastra cu scurtături (None = nu e deschisă)
     shortcuts_window = None
 
@@ -670,6 +680,9 @@ def main():
     view_menu = tk.Menu(menubar, tearoff=0)
     view_menu.add_checkbutton(
         label="Încadrare text", variable=word_wrap, command=toggle_word_wrap
+    )
+    view_menu.add_checkbutton(
+        label="Numere de linie", variable=line_numbers, command=toggle_line_numbers
     )
     menubar.add_cascade(label="View", menu=view_menu)
 

@@ -2,7 +2,7 @@ import tkinter as tk
 
 import pytest
 
-from document import Document
+from document import Document, gutter_width
 
 
 @pytest.fixture(scope="module")
@@ -129,3 +129,69 @@ def test_save_failure_keeps_path(root, tmp_path):
         doc.save(tmp_path / "x.txt")
 
     assert doc.path is None
+
+
+def test_gutter_width_grows_with_digits():
+    # digit_width=8, padding=4 → lățime = cifre * 8 + 8
+    assert gutter_width(0, 8, 4) == 16  # document gol: tot o cifră
+    assert gutter_width(1, 8, 4) == 16
+    assert gutter_width(9, 8, 4) == 16
+    assert gutter_width(10, 8, 4) == 24
+    assert gutter_width(99, 8, 4) == 24
+    assert gutter_width(100, 8, 4) == 32
+
+
+def shown_numbers(root, doc):
+    """Afișează documentul și întoarce numerele desenate în gutter."""
+    # La o fereastră ascunsă Tkinter nu calculează poziția rândurilor,
+    # așa că o arătăm pentru o clipă
+    doc.frame.pack(fill=tk.BOTH, expand=True)
+    root.deiconify()
+    try:
+        root.update()
+        doc.redraw_line_numbers()
+        return [doc.gutter.itemcget(item, "text") for item in doc.gutter.find_all()]
+    finally:
+        root.withdraw()
+        doc.frame.destroy()
+
+
+def test_line_numbers_gutter_shows_each_line(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "a\nb\nc")
+
+    assert doc.gutter.winfo_manager() == "pack"  # gutter-ul există și e afișat
+    assert shown_numbers(root, doc) == ["1", "2", "3"]
+
+
+def test_wrapped_line_gets_one_number(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "cuvant " * 100 + "\nb")  # prima linie se rupe
+
+    assert shown_numbers(root, doc) == ["1", "2"]
+
+
+def test_set_line_numbers_hides_and_shows(root):
+    doc = Document(root)
+
+    doc.set_line_numbers(False)
+    assert doc.gutter.winfo_manager() == ""
+    assert doc.separator.winfo_manager() == ""
+
+    doc.set_line_numbers(True)
+    assert doc.gutter.winfo_manager() == "pack"
+    assert doc.separator.winfo_manager() == "pack"
+
+
+def test_line_numbers_do_not_touch_undo(root, tmp_path):
+    path = tmp_path / "nota.txt"
+    path.write_bytes(b"unu\r\ndoi")
+
+    doc = Document(root)
+    doc.load(path)
+    root.update()  # lasă redesenarea programată să ruleze
+    doc.redraw_line_numbers()
+
+    assert not doc.is_modified()
+    with pytest.raises(tk.TclError):
+        doc.text_area.edit_undo()  # nimic de anulat

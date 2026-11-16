@@ -1,7 +1,20 @@
 import tkinter as tk
+import tkinter.font as tkfont
 from pathlib import Path
 
 import file_io
+
+# Spațiul liber (în pixeli) din stânga și din dreapta numerelor de linie
+GUTTER_PADDING = 6
+
+
+def gutter_width(line_count, digit_width, padding):
+    """Lățimea în pixeli a coloanei de numere: cifrele ultimei linii + margini.
+
+    Exemplu: 9 linii → 1 cifră, 10 linii → 2 cifre, 100 linii → 3 cifre.
+    """
+    digits = len(str(max(line_count, 1)))  # un document gol are tot linia 1
+    return digits * digit_width + 2 * padding
 
 
 class Document:
@@ -28,12 +41,31 @@ class Document:
         # wrap=tk.WORD rupe rândurile lungi la cuvinte, ca Notepad.
         self.text_area = tk.Text(
             self.frame,
-            yscrollcommand=self.scrollbar.set,
+            yscrollcommand=self._on_yscroll,
             xscrollcommand=self.xscrollbar.set,
             undo=True,
             wrap=tk.WORD,
         )
+
+        # Coloana cu numere de linie: un Canvas pe care desenăm numerele.
+        # Nu e zonă de text, deci nu atinge textul și nici istoricul Undo.
+        self.gutter = tk.Canvas(
+            self.frame, highlightthickness=0, bd=0, bg="#f0f0f0", width=0
+        )
+        # Linia subțire dintre numere și text
+        self.separator = tk.Frame(self.frame, width=1, bg="#c0c0c0")
+        # Același font ca zona de text (o copie, ca să-l putem măsura)
+        self.font = tkfont.Font(root=self.text_area, font=self.text_area.cget("font"))
+        self._redraw_pending = False  # True = redesenarea e deja programată
+
+        self.set_line_numbers(True)
         self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Când se schimbă textul sau mărimea, redesenăm numerele.
+        # add="+" = adăugăm legătura fără s-o ștergem pe cea din main.py.
+        for event in ("<KeyPress>", "<<Paste>>", "<<Cut>>", "<<Undo>>",
+                      "<<Redo>>", "<Configure>"):
+            self.text_area.bind(event, self.schedule_line_numbers, add="+")
 
         # Legăm barele de derulare de zona de text
         self.scrollbar.config(command=self.text_area.yview)
@@ -68,6 +100,70 @@ class Document:
             # before=self.text_area o pune sub zona de text, nu lângă ea.
             self.text_area.config(wrap=tk.NONE)
             self.xscrollbar.pack(side=tk.BOTTOM, fill=tk.X, before=self.text_area)
+        # Rândurile s-au rupt altfel, deci numerele își schimbă locul
+        self.schedule_line_numbers()
+
+    def set_line_numbers(self, enabled):
+        """Arată (True) sau ascunde (False) coloana cu numere de linie."""
+        if enabled:
+            # after=self.scrollbar: bara verticală e mereu prima împachetată,
+            # deci gutter-ul ajunge mereu în stânga, lângă text
+            self.gutter.pack(side=tk.LEFT, fill=tk.Y, after=self.scrollbar)
+            self.separator.pack(side=tk.LEFT, fill=tk.Y, after=self.gutter)
+            self.schedule_line_numbers()
+        else:
+            self.gutter.pack_forget()
+            self.separator.pack_forget()
+
+    def _on_yscroll(self, *args):
+        """Textul s-a derulat: mutăm bara de derulare și redesenăm numerele."""
+        self.scrollbar.set(*args)
+        self.schedule_line_numbers()
+
+    def schedule_line_numbers(self, event=None):
+        """Cere redesenarea numerelor, după ce Tkinter termină ce are de făcut.
+
+        La o tastă, textul încă nu s-a schimbat când ajungem aici, așa că
+        redesenăm „mai târziu” (after_idle). Dacă vin multe cereri deodată,
+        redesenăm o singură dată.
+        """
+        if not self._redraw_pending:
+            self._redraw_pending = True
+            self.text_area.after_idle(self.redraw_line_numbers)
+
+    def redraw_line_numbers(self):
+        """Desenează numerele liniilor reale vizibile acum pe ecran."""
+        self._redraw_pending = False
+        # Fila a fost închisă între timp, sau numerele sunt ascunse
+        if not self.gutter.winfo_exists() or not self.gutter.winfo_manager():
+            return
+
+        # Câte linii are documentul → cât de lată e coloana
+        line_count = int(self.text_area.index("end-1c").split(".")[0])
+        width = gutter_width(line_count, self.font.measure("0"), GUTTER_PADDING)
+        if int(self.gutter.cget("width")) != width:
+            self.gutter.config(width=width)
+
+        self.gutter.delete("all")  # ștergem numerele vechi
+
+        # Prima linie reală care se vede (poate fi doar coada ei, cu Word Wrap)
+        first_line = int(self.text_area.index("@0,0").split(".")[0])
+        line = first_line
+        while line <= line_count:
+            # dlineinfo dă poziția PRIMULUI rând vizual al liniei, deci o linie
+            # ruptă de Word Wrap primește un singur număr. None = nu se vede.
+            info = self.text_area.dlineinfo(f"{line}.0")
+            if info is None:
+                if line > first_line:
+                    break  # am trecut de marginea de jos
+                line += 1  # începutul liniei e deasupra ecranului: fără număr
+                continue
+            y = info[1]
+            self.gutter.create_text(
+                width - GUTTER_PADDING, y, anchor="ne",
+                text=str(line), font=self.font, fill="#808080",
+            )
+            line += 1
 
     def is_modified(self):
         """True dacă textul s-a schimbat de la ultima deschidere sau salvare."""
@@ -99,6 +195,7 @@ class Document:
         self.encoding.set(encoding)
         # Textul tocmai a fost încărcat, deci nu are modificări nesalvate
         self.text_area.edit_modified(False)
+        self.schedule_line_numbers()
 
     def save(self, path):
         """Salvează documentul în `path`, cu terminația și codificarea lui.
