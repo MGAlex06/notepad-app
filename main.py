@@ -1,8 +1,10 @@
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 import file_io
 import search
+import session
 from document import Document
 
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
@@ -413,17 +415,28 @@ def main():
         add_tab(Document(notebook))
         return "break"
 
+    def confirm_save(doc):
+        """Dacă `doc` are modificări, întreabă dacă le salvăm.
+
+        Returnează True dacă putem merge mai departe (Da + salvat, sau Nu)
+        și False dacă trebuie să ne oprim (Anulare, sau salvarea n-a reușit).
+        """
+        if not doc.is_modified():
+            return True
+        # Da = True, Nu = False, Anulare = None
+        answer = messagebox.askyesnocancel(
+            "Notepad", f'Salvezi modificările din "{doc.display_name()}"?'
+        )
+        if answer is None:
+            return False  # Anulare
+        if answer and not save_file(doc):
+            return False  # salvarea n-a reușit: nu pierdem textul
+        return True
+
     def close_doc(doc):
         """Închide fila lui `doc`, după ce întreabă de salvare."""
-        if doc.is_modified():
-            # Da = True, Nu = False, Anulare = None
-            answer = messagebox.askyesnocancel(
-                "Notepad", f'Salvezi modificările din "{doc.display_name()}"?'
-            )
-            if answer is None:
-                return  # Anulare: fila rămâne deschisă
-            if answer and not save_file(doc):
-                return  # salvarea n-a reușit: nu pierdem textul
+        if not confirm_save(doc):
+            return  # fila rămâne deschisă
 
         del documents[str(doc.frame)]
         notebook.forget(doc.frame)
@@ -563,7 +576,78 @@ def main():
     notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
     notebook.bind("<ButtonPress-1>", on_tab_press)
     notebook.bind("<ButtonRelease-1>", on_tab_release)
-    new_tab()  # prima filă, goală
+
+    def on_close():
+        """Butonul X al ferestrei: întreabă de salvare, salvează sesiunea, închide."""
+        active_doc = current_doc()
+
+        # Întrebăm pentru fiecare filă modificată, în ordinea filelor
+        for tab in notebook.tabs():
+            doc = documents[str(tab)]
+            if doc.is_modified():
+                notebook.select(doc.frame)  # arătăm fila despre care întrebăm
+                if not confirm_save(doc):
+                    return  # Anulare: aplicația rămâne deschisă
+
+        # Ținem minte doar filele care au un fișier pe disc.
+        # Citim căile abia acum, ca un „Salvează ca” de mai sus să fie inclus.
+        files = []
+        for tab in notebook.tabs():
+            doc = documents[str(tab)]
+            if doc.path is not None:
+                files.append(str(doc.path))
+
+        active = None
+        if active_doc.path is not None:
+            active = str(active_doc.path)
+
+        try:
+            session.save_session(
+                session.session_path(),
+                files,
+                active,
+                root.winfo_width(),
+                root.winfo_height(),
+            )
+        except OSError:
+            pass  # dacă sesiunea nu se poate scrie, închidem oricum
+
+        root.destroy()
+
+    def restore_session():
+        """La pornire: redeschide filele din sesiunea trecută (sau o filă goală)."""
+        data = session.load_session(session.session_path())
+        if data is None:
+            new_tab()  # nu există sesiune validă: o filă goală
+            return
+
+        root.geometry(f"{data['width']}x{data['height']}")
+
+        for path in data["files"]:
+            doc = Document(notebook)
+            try:
+                doc.load(path)
+            except OSError:
+                # Fișierul nu mai există sau nu se poate citi: îl sărim
+                doc.frame.destroy()
+                continue
+            add_tab(doc)
+
+        if not notebook.tabs():
+            new_tab()  # niciun fișier nu s-a putut deschide
+            return
+
+        # Activăm fila din sesiune; dacă nu mai există, rămâne prima filă
+        notebook.select(notebook.tabs()[0])
+        if data["active"] is not None:
+            for tab in notebook.tabs():
+                doc = documents[str(tab)]
+                if doc.path == Path(data["active"]):
+                    notebook.select(doc.frame)
+                    break
+
+    root.protocol("WM_DELETE_WINDOW", on_close)
+    restore_session()
 
     # Pornim bucla aplicației (ține fereastra deschisă)
     root.mainloop()
