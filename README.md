@@ -1,0 +1,124 @@
+# Notepad App
+
+A Notepad-style text editor for Windows, written in Python with Tkinter.
+
+## Features
+
+### Files and encodings
+- New, Open, Save and Save As.
+- Encodings: UTF-8, UTF-8 BOM, UTF-16 LE, UTF-16 BE and ANSI. The encoding is detected automatically when a file is opened and can be changed from the Encoding menu before saving.
+- Line endings (CRLF or LF) are kept as they were in the original file.
+- If the text contains characters that the chosen encoding cannot store, saving stops with an error message and the file on disk is left untouched.
+- Closing a tab or the window asks whether to save unsaved changes.
+
+### Tabs
+- Several files open at once, each in its own tab.
+- Ctrl+N opens a new tab, Ctrl+W closes the current one, and each tab has its own close button.
+- Opening a file reuses the current tab if it is empty and unsaved.
+- There is always at least one tab open.
+
+### Search, replace and editing
+- Find (Ctrl+F) with a "Match case" option. The search wraps around to the start of the document.
+- Replace (Ctrl+H) with "Replace" and "Replace all". A "Replace all" can be undone with a single Ctrl+Z.
+- Go to line (Ctrl+G), with a check that the line number exists.
+- F5 inserts the current date and time (`HH:MM DD.MM.YYYY`) at the cursor.
+
+### Display
+- Word wrap, toggled from the View menu.
+- Line numbers in a column next to the text, toggled from the View menu. A wrapped line gets a single number.
+- Zoom with Ctrl++, Ctrl+-, Ctrl+0 and Ctrl+mouse wheel, from 6 to 40 points. The line numbers scale with the text.
+- Status bar with line, column, character count and encoding.
+- A list of keyboard shortcuts in the Help menu.
+
+### Romanian and English interface
+- Every visible text comes from one module (`strings.py`), in Romanian and English.
+- The language is changed from Help > "Limbă / Language" and applies immediately, without a restart.
+
+### Session
+- On exit, the app saves the open files, the active tab, the window size and the language to `%APPDATA%\NotepadApp\session.json`, and restores them on the next start.
+- A missing or damaged session file is ignored, and the app starts with an empty tab.
+
+## Tech stack
+
+- Python 3.12
+- Tkinter (the standard Python GUI toolkit; `ttk.Notebook` for tabs)
+- pytest for tests
+
+The app has no external runtime dependencies. It uses only the Python standard library. pytest is needed only to run the tests.
+
+## Project structure
+
+| File | Role |
+| --- | --- |
+| `main.py` | Starts the app: main window, menus, dialogs and keyboard shortcuts. |
+| `document.py` | One tab: text area, line numbers and zoom, plus small helpers (`gutter_width`, `next_font_size`, `format_timestamp`). |
+| `file_io.py` | Reads and writes files, detects the encoding and keeps track of line endings. |
+| `search.py` | Find, replace all and line-number validation, working on plain strings. |
+| `session.py` | Saves and loads the session file. |
+| `strings.py` | All interface texts in Romanian and English, and the `t()` lookup function. |
+| `test_*.py` | pytest tests, one file per module. |
+
+The logic (`file_io`, `search`, `session`, `strings`) is kept separate from the interface (`main`, `document`). The logic modules do not import Tkinter, so they can be tested with plain inputs and outputs. `test_document.py` also covers a few interface details using a hidden Tkinter window.
+
+## Getting started
+
+Requires Windows and Python 3.12. Tkinter is included in the standard installer from python.org.
+
+```powershell
+git clone https://github.com/MGAlex06/notepad-app.git
+cd notepad-app
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python main.py
+```
+
+If PowerShell blocks `Activate.ps1`, allow local scripts for your user first:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+### Running the tests
+
+With the virtual environment active:
+
+```powershell
+pip install pytest
+pytest
+```
+
+## Design decisions
+
+- **Encoding detection.** The app first looks for a byte order mark (UTF-8, UTF-16 LE, UTF-16 BE). Without one, it tries strict UTF-8. If that fails, it falls back to ANSI and replaces unreadable bytes instead of refusing to open the file.
+- **Line endings.** Files are read as raw bytes. The Tkinter text widget only receives `\n`, and the original ending (CRLF or LF) is remembered and written back on save.
+- **Safe saving.** The text is encoded in memory before the file is opened for writing. If a character does not fit the encoding, the file on disk is not touched.
+- **One undo step.** "Replace all", a single "Replace" and the F5 date insert each turn off Tkinter's automatic undo separators while they run, so one Ctrl+Z reverts the whole operation.
+- **Session in `%APPDATA%`.** The session is a small JSON file that is checked field by field when loaded. A damaged file is ignored, an unknown language falls back to Romanian, and files that no longer exist are skipped.
+
+## How it was built
+
+This is a learning project. The code was written by Claude Code, Anthropic's AI coding assistant, under the author's direction. The author set the rules, reviewed every plan, approved every change, tested the result and made the commits.
+
+- The rules for the assistant are in `CLAUDE.md`:
+  - one feature at a time, with simple and readable code;
+  - a short plan before each change and a plain explanation after it;
+  - no new packages without a reason;
+  - explicit `encoding="utf-8"`, `newline=""` and `pathlib` for files;
+  - logic kept separate from the interface;
+  - no automatic commits.
+- For each feature, the author read and checked the plan before any change was made, and approved each change manually.
+- Plans were also reviewed with the help of a separate Claude conversation used as a tutor and reviewer.
+- Each change was checked with the pytest suite and by testing the app by hand.
+- The author made the commits, roughly one per feature, as the git history shows.
+
+## Known limitations
+
+- Windows only. The session location (`%APPDATA%`) and the ANSI code page are Windows-specific.
+- Unsaved text is not kept in the session. Only tabs backed by a file on disk are restored.
+- UTF-16 files without a byte order mark are not detected. They open as UTF-8 or ANSI and show garbled text.
+- ANSI uses the system code page (for example cp1252, or cp1250 on Central European systems). The Romanian letters ș and ț (with comma below) do not exist in these code pages, and ă is also missing from cp1252. Saving such text in ANSI is refused with a message that suggests another encoding.
+
+## Roadmap
+
+- A standalone Windows `.exe` built with PyInstaller.
+- A Markdown mode.
