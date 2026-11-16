@@ -6,6 +6,7 @@ from tkinter import filedialog, messagebox, ttk
 import file_io
 import search
 import session
+import strings
 from document import (
     DEFAULT_FONT_SIZE,
     MAX_FONT_SIZE,
@@ -14,30 +15,36 @@ from document import (
     format_timestamp,
     next_font_size,
 )
+from strings import t
 
-FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
+
+def file_types():
+    """Filtrele din dialogurile Open/Save, în limba curentă."""
+    return [(t("filetype.text"), "*.txt"), (t("filetype.all"), "*.*")]
+
 
 # Scurtăturile care funcționează acum, afișate în Ajutor → Scurtături.
+# Al doilea element e cheia textului din strings.py, tradusă la afișare.
 # Primele 12 le legăm noi în add_tab; restul vin gata făcute din Tkinter.
 SHORTCUTS = [
-    ("Ctrl+N", "Filă nouă"),
-    ("Ctrl+W", "Închide fila"),
-    ("Ctrl+O", "Deschide"),
-    ("Ctrl+S", "Salvează"),
-    ("Ctrl+Shift+S", "Salvează ca"),
-    ("Ctrl+F", "Caută"),
-    ("Ctrl+H", "Înlocuiește"),
-    ("Ctrl+G", "Salt la linie"),
-    ("F5", "Inserează data și ora"),
-    ("Ctrl++", "Mărește textul"),
-    ("Ctrl+-", "Micșorează textul"),
-    ("Ctrl+0", "Dimensiune implicită"),
-    ("Ctrl+Z", "Anulează"),
-    ("Ctrl+Y", "Refă"),
-    ("Ctrl+X", "Taie"),
-    ("Ctrl+C", "Copiază"),
-    ("Ctrl+V", "Lipește"),
-    ("Ctrl+A", "Selectează tot"),
+    ("Ctrl+N", "shortcut.new_tab"),
+    ("Ctrl+W", "shortcut.close_tab"),
+    ("Ctrl+O", "shortcut.open"),
+    ("Ctrl+S", "shortcut.save"),
+    ("Ctrl+Shift+S", "shortcut.save_as"),
+    ("Ctrl+F", "shortcut.find"),
+    ("Ctrl+H", "shortcut.replace"),
+    ("Ctrl+G", "shortcut.goto"),
+    ("F5", "shortcut.datetime"),
+    ("Ctrl++", "shortcut.zoom_in"),
+    ("Ctrl+-", "shortcut.zoom_out"),
+    ("Ctrl+0", "shortcut.zoom_reset"),
+    ("Ctrl+Z", "shortcut.undo"),
+    ("Ctrl+Y", "shortcut.redo"),
+    ("Ctrl+X", "shortcut.cut"),
+    ("Ctrl+C", "shortcut.copy"),
+    ("Ctrl+V", "shortcut.paste"),
+    ("Ctrl+A", "shortcut.select_all"),
 ]
 
 
@@ -52,9 +59,15 @@ def make_x_image(color):
 
 
 def main():
+    # Citim sesiunea înainte de interfață, ca meniurile să fie construite
+    # direct în limba salvată (None = nu există sesiune validă)
+    session_data = session.load_session(session.session_path())
+    if session_data is not None:
+        strings.set_language(session_data["language"])
+
     # Fereastra principală a aplicației
     root = tk.Tk()
-    root.title("Fără titlu - Notepad")
+    root.title(f"{t('app.untitled')} - Notepad")
     root.geometry("800x600")
 
     # Bara de stare de jos. O împachetăm prima, ca să rămână vizibilă
@@ -121,12 +134,12 @@ def main():
         column = int(column) + 1
         char_count = len(doc.get_text())
         status_bar.config(
-            text=f"Ln {line}, Col {column} | {char_count} caractere"
+            text=f"Ln {line}, Col {column} | {t('status.chars', count=char_count)}"
             f" | {doc.encoding.get()}"
         )
 
     def open_file():
-        filename = filedialog.askopenfilename(filetypes=FILE_TYPES)
+        filename = filedialog.askopenfilename(filetypes=file_types())
         if not filename:
             return  # utilizatorul a apăsat Cancel
 
@@ -144,7 +157,7 @@ def main():
         except OSError as error:
             if not reuse_current:
                 doc.frame.destroy()  # documentul nou nu mai e necesar
-            messagebox.showerror("Eroare", f"Nu am putut deschide fișierul:\n{error}")
+            messagebox.showerror(t("error.title"), t("error.open", error=error))
             return
 
         if reuse_current:
@@ -160,14 +173,11 @@ def main():
             doc.save(path)
         except UnicodeEncodeError:
             messagebox.showerror(
-                "Eroare",
-                "Textul conține caractere care nu pot fi salvate în "
-                f"{doc.encoding.get()}.\n"
-                "Alege altă codificare din meniul Codificare.",
+                t("error.title"), t("error.encode", encoding=doc.encoding.get())
             )
             return False
         except OSError as error:
-            messagebox.showerror("Eroare", f"Nu am putut salva fișierul:\n{error}")
+            messagebox.showerror(t("error.title"), t("error.save", error=error))
             return False
 
         update_tab_title(doc)
@@ -177,7 +187,7 @@ def main():
     def save_file_as(doc):
         """Întreabă unde să salveze `doc`. Returnează True dacă s-a salvat."""
         filename = filedialog.asksaveasfilename(
-            defaultextension=".txt", filetypes=FILE_TYPES
+            defaultextension=".txt", filetypes=file_types()
         )
         if not filename:
             return False  # utilizatorul a apăsat Cancel
@@ -202,7 +212,9 @@ def main():
 
         position = search.find_next_wrap(text, query, start, match_case)
         if position is None:
-            messagebox.showinfo("Notepad", f'Nu găsesc "{query}"', parent=parent)
+            messagebox.showinfo(
+                "Notepad", t("msg.not_found", query=query), parent=parent
+            )
             return
 
         # Transformăm poziția (un număr) în indici Tkinter
@@ -263,17 +275,19 @@ def main():
             return "break"
 
         find_window = tk.Toplevel(root)
-        find_window.title("Caută")
+        find_window.title(t("find.title"))
         find_window.transient(root)  # stă mereu deasupra ferestrei principale
         find_window.resizable(False, False)
 
-        tk.Label(find_window, text="Caută:").grid(row=0, column=0, padx=5, pady=5)
+        tk.Label(find_window, text=t("find.label")).grid(
+            row=0, column=0, padx=5, pady=5
+        )
         find_entry = tk.Entry(find_window, width=30)
         find_entry.grid(row=0, column=1, padx=5, pady=5)
 
         match_case = tk.BooleanVar(value=False)
         tk.Checkbutton(
-            find_window, text="Potrivire majuscule", variable=match_case
+            find_window, text=t("find.match_case"), variable=match_case
         ).grid(row=1, column=1, sticky="w", padx=5)
 
         def close():
@@ -285,10 +299,10 @@ def main():
         def do_find():
             find_and_select(find_entry.get(), match_case.get(), find_window)
 
-        tk.Button(find_window, text="Caută următorul", command=do_find).grid(
+        tk.Button(find_window, text=t("find.next"), command=do_find).grid(
             row=0, column=2, padx=5, pady=5, sticky="ew"
         )
-        tk.Button(find_window, text="Închide", command=close).grid(
+        tk.Button(find_window, text=t("button.close"), command=close).grid(
             row=1, column=2, padx=5, pady=5, sticky="ew"
         )
 
@@ -312,17 +326,17 @@ def main():
             return "break"
 
         replace_window = tk.Toplevel(root)
-        replace_window.title("Înlocuiește")
+        replace_window.title(t("replace.title"))
         replace_window.transient(root)  # stă mereu deasupra ferestrei principale
         replace_window.resizable(False, False)
 
-        tk.Label(replace_window, text="Caută:").grid(
+        tk.Label(replace_window, text=t("find.label")).grid(
             row=0, column=0, padx=5, pady=5, sticky="w"
         )
         replace_find_entry = tk.Entry(replace_window, width=30)
         replace_find_entry.grid(row=0, column=1, padx=5, pady=5)
 
-        tk.Label(replace_window, text="Înlocuiește cu:").grid(
+        tk.Label(replace_window, text=t("replace.with")).grid(
             row=1, column=0, padx=5, pady=5, sticky="w"
         )
         replacement_entry = tk.Entry(replace_window, width=30)
@@ -330,7 +344,7 @@ def main():
 
         match_case = tk.BooleanVar(value=False)
         tk.Checkbutton(
-            replace_window, text="Potrivire majuscule", variable=match_case
+            replace_window, text=t("find.match_case"), variable=match_case
         ).grid(row=2, column=1, sticky="w", padx=5)
 
         def close():
@@ -398,19 +412,21 @@ def main():
                 update_status()
 
             messagebox.showinfo(
-                "Notepad", f"Am înlocuit {count} potriviri.", parent=replace_window
+                "Notepad", t("msg.replaced", count=count), parent=replace_window
             )
 
-        tk.Button(replace_window, text="Caută următorul", command=do_find).grid(
+        tk.Button(replace_window, text=t("find.next"), command=do_find).grid(
             row=0, column=2, padx=5, pady=5, sticky="ew"
         )
-        tk.Button(replace_window, text="Înlocuiește", command=do_replace).grid(
+        tk.Button(replace_window, text=t("replace.one"), command=do_replace).grid(
             row=1, column=2, padx=5, pady=5, sticky="ew"
         )
-        tk.Button(replace_window, text="Înlocuiește tot", command=do_replace_all).grid(
+        tk.Button(
+            replace_window, text=t("replace.all"), command=do_replace_all
+        ).grid(
             row=2, column=2, padx=5, pady=5, sticky="ew"
         )
-        tk.Button(replace_window, text="Închide", command=close).grid(
+        tk.Button(replace_window, text=t("button.close"), command=close).grid(
             row=3, column=2, padx=5, pady=5, sticky="ew"
         )
 
@@ -434,11 +450,13 @@ def main():
             return "break"
 
         goto_window = tk.Toplevel(root)
-        goto_window.title("Salt la linie")
+        goto_window.title(t("goto.title"))
         goto_window.transient(root)  # stă mereu deasupra ferestrei principale
         goto_window.resizable(False, False)
 
-        tk.Label(goto_window, text="Număr linie:").grid(row=0, column=0, padx=5, pady=5)
+        tk.Label(goto_window, text=t("goto.label")).grid(
+            row=0, column=0, padx=5, pady=5
+        )
         goto_entry = tk.Entry(goto_window, width=15)
         goto_entry.grid(row=0, column=1, padx=5, pady=5)
 
@@ -460,7 +478,7 @@ def main():
             if line is None:
                 messagebox.showinfo(
                     "Notepad",
-                    f"Numărul liniei trebuie să fie între 1 și {line_count}.",
+                    t("msg.goto_range", max=line_count),
                     parent=goto_window,
                 )
                 return
@@ -473,10 +491,10 @@ def main():
             close()
             text_area.focus_set()  # cursorul clipește în text, pe linia nouă
 
-        tk.Button(goto_window, text="Salt", command=do_goto).grid(
+        tk.Button(goto_window, text=t("goto.button"), command=do_goto).grid(
             row=0, column=2, padx=5, pady=5, sticky="ew"
         )
-        tk.Button(goto_window, text="Închide", command=close).grid(
+        tk.Button(goto_window, text=t("button.close"), command=close).grid(
             row=1, column=2, padx=5, pady=5, sticky="ew"
         )
 
@@ -554,7 +572,7 @@ def main():
             return True
         # Da = True, Nu = False, Anulare = None
         answer = messagebox.askyesnocancel(
-            "Notepad", f'Salvezi modificările din "{doc.display_name()}"?'
+            "Notepad", t("msg.save_changes", name=doc.display_name())
         )
         if answer is None:
             return False  # Anulare
@@ -691,16 +709,16 @@ def main():
 
         window = tk.Toplevel(root)
         shortcuts_window = window
-        window.title("Scurtături de la tastatură")
+        window.title(t("shortcuts.title"))
         window.transient(root)  # stă deasupra ferestrei principale
         window.resizable(False, False)
 
         # Câte un rând pentru fiecare scurtătură: tasta în stânga, ce face în dreapta
-        for row, (keys, description) in enumerate(SHORTCUTS):
+        for row, (keys, description_key) in enumerate(SHORTCUTS):
             tk.Label(window, text=keys, font=("Segoe UI", 9, "bold")).grid(
                 row=row, column=0, padx=(10, 20), pady=2, sticky="w"
             )
-            tk.Label(window, text=description).grid(
+            tk.Label(window, text=t(description_key)).grid(
                 row=row, column=1, padx=(0, 10), pady=2, sticky="w"
             )
 
@@ -709,76 +727,135 @@ def main():
             window.destroy()
             shortcuts_window = None
 
-        tk.Button(window, text="Închide", width=10, command=close).grid(
+        tk.Button(window, text=t("button.close"), width=10, command=close).grid(
             row=len(SHORTCUTS), column=0, columnspan=2, pady=10
         )
 
         # Butonul X din colț face același lucru ca "Închide"
         window.protocol("WM_DELETE_WINDOW", close)
 
-    # Meniul de sus, cu submeniul File.
-    # `accelerator` doar afișează scurtătura în dreapta; tasta în sine
-    # funcționează prin bind-urile din add_tab.
-    menubar = tk.Menu(root)
-    file_menu = tk.Menu(menubar, tearoff=0)
-    file_menu.add_command(label="Filă nouă", command=new_tab, accelerator="Ctrl+N")
-    file_menu.add_command(label="Închide fila", command=close_tab, accelerator="Ctrl+W")
-    file_menu.add_separator()
-    file_menu.add_command(label="Open...", command=open_shortcut, accelerator="Ctrl+O")
-    file_menu.add_command(label="Save", command=save_shortcut, accelerator="Ctrl+S")
-    file_menu.add_command(
-        label="Save As...", command=save_as_shortcut, accelerator="Ctrl+Shift+S"
-    )
-    menubar.add_cascade(label="File", menu=file_menu)
+    # Limba interfeței (Ajutor → Limbă / Language). Valoarea e codul limbii.
+    language_var = tk.StringVar(master=root, value=strings.get_language())
 
-    # Meniul Editare: căutare, înlocuire și salt la linie.
-    # Folosim aceleași funcții ca scurtăturile din add_tab.
-    edit_menu = tk.Menu(menubar, tearoff=0)
-    edit_menu.add_command(
-        label="Caută...", command=open_find_window, accelerator="Ctrl+F"
-    )
-    edit_menu.add_command(
-        label="Înlocuiește...", command=open_replace_window, accelerator="Ctrl+H"
-    )
-    edit_menu.add_command(
-        label="Salt la linie...", command=open_goto_window, accelerator="Ctrl+G"
-    )
-    edit_menu.add_separator()
-    edit_menu.add_command(
-        label="Dată și oră", command=insert_timestamp, accelerator="F5"
-    )
-    menubar.add_cascade(label="Editare", menu=edit_menu)
+    # Bara de meniuri și meniul Codificare (on_tab_changed are nevoie de el).
+    # Le creăm în build_menus, ca să le putem reface la schimbarea limbii.
+    menubar = None
+    encoding_menu = None
 
-    # Meniul Codificare: alegi cu ce codificare se salvează fișierul.
-    # Variabila butoanelor radio o setăm în on_tab_changed, pe documentul activ.
-    encoding_menu = tk.Menu(menubar, tearoff=0)
-    for name in file_io.ENCODINGS:
-        encoding_menu.add_radiobutton(label=name, value=name, command=update_status)
-    menubar.add_cascade(label="Codificare", menu=encoding_menu)
+    def build_menus():
+        """Construiește bara de meniuri în limba curentă (și o înlocuiește pe cea veche).
 
-    # Meniul View: opțiunea bifabilă de încadrare a textului
-    view_menu = tk.Menu(menubar, tearoff=0)
-    view_menu.add_checkbutton(
-        label="Încadrare text", variable=word_wrap, command=toggle_word_wrap
-    )
-    view_menu.add_checkbutton(
-        label="Numere de linie", variable=line_numbers, command=toggle_line_numbers
-    )
-    # Submeniul Zoom
-    zoom_menu = tk.Menu(view_menu, tearoff=0)
-    zoom_menu.add_command(label="Mărește", command=zoom_in, accelerator="Ctrl++")
-    zoom_menu.add_command(label="Micșorează", command=zoom_out, accelerator="Ctrl+-")
-    zoom_menu.add_command(
-        label="Dimensiune implicită", command=zoom_reset, accelerator="Ctrl+0"
-    )
-    view_menu.add_cascade(label="Zoom", menu=zoom_menu)
-    menubar.add_cascade(label="View", menu=view_menu)
+        Bifele și butoanele radio folosesc variabile Tkinter care trăiesc în
+        afara meniului (word_wrap, line_numbers, language_var), deci starea lor
+        se păstrează când refacem meniul.
+        """
+        nonlocal menubar, encoding_menu
+        old_menubar = menubar
 
-    # Meniul Ajutor, ultimul din bară
-    help_menu = tk.Menu(menubar, tearoff=0)
-    help_menu.add_command(label="Scurtături de la tastatură...", command=show_shortcuts)
-    menubar.add_cascade(label="Ajutor", menu=help_menu)
-    root.config(menu=menubar)
+        # `accelerator` doar afișează scurtătura în dreapta; tasta în sine
+        # funcționează prin bind-urile din add_tab.
+        menubar = tk.Menu(root)
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(
+            label=t("menu.new_tab"), command=new_tab, accelerator="Ctrl+N"
+        )
+        file_menu.add_command(
+            label=t("menu.close_tab"), command=close_tab, accelerator="Ctrl+W"
+        )
+        file_menu.add_separator()
+        file_menu.add_command(
+            label=t("menu.open"), command=open_shortcut, accelerator="Ctrl+O"
+        )
+        file_menu.add_command(
+            label=t("menu.save"), command=save_shortcut, accelerator="Ctrl+S"
+        )
+        file_menu.add_command(
+            label=t("menu.save_as"), command=save_as_shortcut,
+            accelerator="Ctrl+Shift+S",
+        )
+        menubar.add_cascade(label=t("menu.file"), menu=file_menu)
+
+        # Meniul Editare: căutare, înlocuire, salt la linie, dată și oră.
+        # Folosim aceleași funcții ca scurtăturile din add_tab.
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command(
+            label=t("menu.find"), command=open_find_window, accelerator="Ctrl+F"
+        )
+        edit_menu.add_command(
+            label=t("menu.replace"), command=open_replace_window, accelerator="Ctrl+H"
+        )
+        edit_menu.add_command(
+            label=t("menu.goto"), command=open_goto_window, accelerator="Ctrl+G"
+        )
+        edit_menu.add_separator()
+        edit_menu.add_command(
+            label=t("menu.datetime"), command=insert_timestamp, accelerator="F5"
+        )
+        menubar.add_cascade(label=t("menu.edit"), menu=edit_menu)
+
+        # Meniul Codificare: alegi cu ce codificare se salvează fișierul.
+        # Numele codificărilor nu se traduc.
+        encoding_menu = tk.Menu(menubar, tearoff=0)
+        for name in file_io.ENCODINGS:
+            encoding_menu.add_radiobutton(label=name, value=name, command=update_status)
+        menubar.add_cascade(label=t("menu.encoding"), menu=encoding_menu)
+        # Butoanele radio arată codificarea documentului activ (dacă există deja)
+        if notebook.select():
+            for index in range(len(file_io.ENCODINGS)):
+                encoding_menu.entryconfig(index, variable=current_doc().encoding)
+
+        # Meniul Vizualizare: bife și submeniul Zoom
+        view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu.add_checkbutton(
+            label=t("menu.word_wrap"), variable=word_wrap, command=toggle_word_wrap
+        )
+        view_menu.add_checkbutton(
+            label=t("menu.line_numbers"), variable=line_numbers,
+            command=toggle_line_numbers,
+        )
+        zoom_menu = tk.Menu(view_menu, tearoff=0)
+        zoom_menu.add_command(
+            label=t("menu.zoom_in"), command=zoom_in, accelerator="Ctrl++"
+        )
+        zoom_menu.add_command(
+            label=t("menu.zoom_out"), command=zoom_out, accelerator="Ctrl+-"
+        )
+        zoom_menu.add_command(
+            label=t("menu.zoom_reset"), command=zoom_reset, accelerator="Ctrl+0"
+        )
+        view_menu.add_cascade(label=t("menu.zoom"), menu=zoom_menu)
+        menubar.add_cascade(label=t("menu.view"), menu=view_menu)
+
+        # Meniul Ajutor, ultimul din bară, cu submeniul de limbă.
+        # Numele limbilor („Română”, „English”) nu se traduc.
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label=t("menu.shortcuts"), command=show_shortcuts)
+        help_menu.add_separator()
+        language_menu = tk.Menu(help_menu, tearoff=0)
+        for code, name in strings.LANGUAGES.items():
+            language_menu.add_radiobutton(
+                label=name, value=code, variable=language_var,
+                command=change_language,
+            )
+        help_menu.add_cascade(label=t("menu.language"), menu=language_menu)
+        menubar.add_cascade(label=t("menu.help"), menu=help_menu)
+
+        root.config(menu=menubar)
+        if old_menubar is not None:
+            old_menubar.destroy()  # meniul vechi, în limba veche, nu mai trebuie
+
+    def change_language():
+        """Ajutor → Limbă: trece toată interfața în limba aleasă, imediat."""
+        strings.set_language(language_var.get())
+        # Refacem meniul puțin mai târziu, nu chiar în timpul click-ului pe el
+        root.after_idle(build_menus)
+        update_title()
+        update_status()
+        # „Fără titlu” ↔ „Untitled” pe filele nesalvate
+        for doc in documents.values():
+            update_tab_title(doc)
+
+    build_menus()
 
     notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
     notebook.bind("<ButtonPress-1>", on_tab_press)
@@ -815,15 +892,18 @@ def main():
                 active,
                 root.winfo_width(),
                 root.winfo_height(),
+                strings.get_language(),
             )
         except OSError:
             pass  # dacă sesiunea nu se poate scrie, închidem oricum
 
         root.destroy()
 
-    def restore_session():
-        """La pornire: redeschide filele din sesiunea trecută (sau o filă goală)."""
-        data = session.load_session(session.session_path())
+    def restore_session(data):
+        """La pornire: redeschide filele din sesiunea `data` (sau o filă goală).
+
+        `data` e ce a returnat session.load_session (None = fără sesiune validă).
+        """
         if data is None:
             new_tab()  # nu există sesiune validă: o filă goală
             return
@@ -854,7 +934,7 @@ def main():
                     break
 
     root.protocol("WM_DELETE_WINDOW", on_close)
-    restore_session()
+    restore_session(session_data)
 
     # Pornim bucla aplicației (ține fereastra deschisă)
     root.mainloop()

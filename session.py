@@ -2,24 +2,28 @@ import json
 import os
 from pathlib import Path
 
+import strings
+
 
 def session_path():
     """Unde ținem sesiunea: %APPDATA%\\NotepadApp\\session.json."""
     return Path(os.environ["APPDATA"]) / "NotepadApp" / "session.json"
 
 
-def save_session(path, files, active, width, height):
+def save_session(path, files, active, width, height, language):
     """Scrie sesiunea în fișierul JSON `path`.
 
     `files` = lista căilor fișierelor deschise, în ordinea filelor.
     `active` = calea fișierului din fila activă (None dacă era „Fără titlu”).
     `width`, `height` = dimensiunea ferestrei, în pixeli.
+    `language` = codul limbii interfeței, de exemplu "ro".
     """
     data = {
         "files": files,
         "active": active,
         "width": width,
         "height": height,
+        "language": language,
     }
     path = Path(path)
     # Creăm folderul NotepadApp dacă nu există încă
@@ -39,7 +43,7 @@ def load_session(path):
     """Citește sesiunea din `path`.
 
     Returnează un dict cu cheile "files", "active", "width", "height",
-    sau None dacă fișierul lipsește, e stricat sau nu are forma așteptată.
+    "language", sau None dacă fișierul lipsește, e stricat sau nu are forma așteptată.
     """
     try:
         with Path(path).open("r", encoding="utf-8", newline="") as f:
@@ -69,4 +73,16 @@ def load_session(path):
     if not is_positive_int(width) or not is_positive_int(height):
         return None
 
-    return {"files": files, "active": active, "width": width, "height": height}
+    # Limba: un session.json vechi n-o are, iar una necunoscută o ignorăm.
+    # În ambele cazuri folosim limba implicită, fără să pierdem restul sesiunii.
+    language = data.get("language")
+    if not isinstance(language, str) or language not in strings.LANGUAGES:
+        language = strings.DEFAULT_LANGUAGE
+
+    return {
+        "files": files,
+        "active": active,
+        "width": width,
+        "height": height,
+        "language": language,
+    }

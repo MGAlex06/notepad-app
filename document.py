@@ -3,6 +3,7 @@ import tkinter.font as tkfont
 from pathlib import Path
 
 import file_io
+from strings import t
 
 # Spațiul liber (în pixeli) din stânga și din dreapta numerelor de linie
 GUTTER_PADDING = 6
@@ -110,7 +111,7 @@ class Document:
     def display_name(self):
         """Numele afișat în titlul ferestrei."""
         if self.path is None:
-            return "Fără titlu"
+            return t("app.untitled")  # în limba curentă
         return self.path.name
 
     def set_word_wrap(self, enabled):
