@@ -6,12 +6,19 @@ from tkinter import filedialog, messagebox, ttk
 import file_io
 import search
 import session
-from document import Document, format_timestamp
+from document import (
+    DEFAULT_FONT_SIZE,
+    MAX_FONT_SIZE,
+    MIN_FONT_SIZE,
+    Document,
+    format_timestamp,
+    next_font_size,
+)
 
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
 
 # Scurtăturile care funcționează acum, afișate în Ajutor → Scurtături.
-# Primele nouă le legăm noi în add_tab; restul vin gata făcute din Tkinter.
+# Primele 12 le legăm noi în add_tab; restul vin gata făcute din Tkinter.
 SHORTCUTS = [
     ("Ctrl+N", "Filă nouă"),
     ("Ctrl+W", "Închide fila"),
@@ -22,6 +29,9 @@ SHORTCUTS = [
     ("Ctrl+H", "Înlocuiește"),
     ("Ctrl+G", "Salt la linie"),
     ("F5", "Inserează data și ora"),
+    ("Ctrl++", "Mărește textul"),
+    ("Ctrl+-", "Micșorează textul"),
+    ("Ctrl+0", "Dimensiune implicită"),
     ("Ctrl+Z", "Anulează"),
     ("Ctrl+Y", "Refă"),
     ("Ctrl+X", "Taie"),
@@ -90,6 +100,8 @@ def main():
     word_wrap = tk.BooleanVar(master=root, value=True)
     # Numerele de linie (View → Numere de linie): tot o setare pentru toate filele
     line_numbers = tk.BooleanVar(master=root, value=True)
+    # Mărimea textului (zoom), tot o setare pentru toate filele
+    font_size = DEFAULT_FONT_SIZE
 
     def current_doc():
         """Documentul din fila activă."""
@@ -482,6 +494,7 @@ def main():
         documents[str(doc.frame)] = doc
         doc.set_word_wrap(word_wrap.get())  # fila nouă primește setarea curentă
         doc.set_line_numbers(line_numbers.get())
+        doc.set_font_size(font_size)  # și mărimea curentă a textului (zoom)
 
         text_area = doc.text_area
         # Actualizăm bara de stare după fiecare tastă și fiecare click
@@ -499,6 +512,17 @@ def main():
         text_area.bind("<Control-g>", open_goto_window)
         text_area.bind("<Control-G>", open_goto_window)
         text_area.bind("<F5>", insert_timestamp)
+        # Zoom. Pe Windows „+” vine din Shift+=; Tkinter potrivește
+        # <Control-plus> și cu Shift apăsat. KP_ = tastatura numerică.
+        text_area.bind("<Control-plus>", zoom_in)
+        text_area.bind("<Control-equal>", zoom_in)
+        text_area.bind("<Control-KP_Add>", zoom_in)
+        text_area.bind("<Control-minus>", zoom_out)
+        text_area.bind("<Control-KP_Subtract>", zoom_out)
+        text_area.bind("<Control-0>", zoom_reset)
+        text_area.bind("<Control-KP_0>", zoom_reset)
+        # Doar Ctrl+rotița; rotița simplă derulează în continuare normal
+        text_area.bind("<Control-MouseWheel>", on_ctrl_wheel)
         text_area.bind("<Control-n>", new_tab)
         text_area.bind("<Control-N>", new_tab)
         text_area.bind("<Control-w>", close_tab)
@@ -621,6 +645,37 @@ def main():
         for doc in documents.values():
             doc.set_line_numbers(line_numbers.get())
 
+    def apply_font_size(size):
+        """Ține minte noua mărime și o aplică tuturor filelor deschise."""
+        nonlocal font_size
+        font_size = size
+        for doc in documents.values():
+            doc.set_font_size(size)
+
+    def zoom_in(event=None):
+        """Ctrl++: mărește textul cu un punct (cel mult MAX_FONT_SIZE)."""
+        apply_font_size(next_font_size(font_size, 1, MIN_FONT_SIZE, MAX_FONT_SIZE))
+        return "break"
+
+    def zoom_out(event=None):
+        """Ctrl+-: micșorează textul cu un punct (cel puțin MIN_FONT_SIZE)."""
+        apply_font_size(next_font_size(font_size, -1, MIN_FONT_SIZE, MAX_FONT_SIZE))
+        return "break"
+
+    def zoom_reset(event=None):
+        """Ctrl+0: revine la mărimea implicită."""
+        apply_font_size(DEFAULT_FONT_SIZE)
+        return "break"
+
+    def on_ctrl_wheel(event):
+        """Ctrl+rotița: în sus mărește, în jos micșorează."""
+        # Pe Windows, event.delta e pozitiv în sus și negativ în jos
+        if event.delta > 0:
+            zoom_in()
+        else:
+            zoom_out()
+        return "break"  # fără "break", textul s-ar și derula
+
     # Fereastra cu scurtături (None = nu e deschisă)
     shortcuts_window = None
 
@@ -709,6 +764,14 @@ def main():
     view_menu.add_checkbutton(
         label="Numere de linie", variable=line_numbers, command=toggle_line_numbers
     )
+    # Submeniul Zoom
+    zoom_menu = tk.Menu(view_menu, tearoff=0)
+    zoom_menu.add_command(label="Mărește", command=zoom_in, accelerator="Ctrl++")
+    zoom_menu.add_command(label="Micșorează", command=zoom_out, accelerator="Ctrl+-")
+    zoom_menu.add_command(
+        label="Dimensiune implicită", command=zoom_reset, accelerator="Ctrl+0"
+    )
+    view_menu.add_cascade(label="Zoom", menu=zoom_menu)
     menubar.add_cascade(label="View", menu=view_menu)
 
     # Meniul Ajutor, ultimul din bară

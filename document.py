@@ -7,6 +7,16 @@ import file_io
 # Spațiul liber (în pixeli) din stânga și din dreapta numerelor de linie
 GUTTER_PADDING = 6
 
+# Mărimea fontului (în puncte) pentru zoom
+DEFAULT_FONT_SIZE = 10  # Courier New 10, ca fontul implicit al lui Tkinter
+MIN_FONT_SIZE = 6
+MAX_FONT_SIZE = 40
+
+
+def next_font_size(current, step, minimum, maximum):
+    """Mărimea după un pas de zoom (+1 / -1), ținută între minimum și maximum."""
+    return max(minimum, min(maximum, current + step))
+
 
 def gutter_width(line_count, digit_width, padding):
     """Lățimea în pixeli a coloanei de numere: cifrele ultimei linii + margini.
@@ -44,11 +54,18 @@ class Document:
         # când încadrarea textului e oprită (vezi set_word_wrap).
         self.xscrollbar = tk.Scrollbar(self.frame, orient=tk.HORIZONTAL)
 
+        # Fontul documentului: o copie a fontului implicit (Courier New).
+        # Îl folosesc și textul, și numerele de linie, așa că la zoom
+        # schimbăm mărimea într-un singur loc și cresc amândouă.
+        self.font = tkfont.Font(root=self.frame, font="TkFixedFont")
+        self.font.config(size=DEFAULT_FONT_SIZE)
+
         # Zona de text, care ocupă tot restul.
         # undo=True pornește Ctrl+Z (anulează) și Ctrl+Y (refă).
         # wrap=tk.WORD rupe rândurile lungi la cuvinte, ca Notepad.
         self.text_area = tk.Text(
             self.frame,
+            font=self.font,
             yscrollcommand=self._on_yscroll,
             xscrollcommand=self.xscrollbar.set,
             undo=True,
@@ -62,8 +79,6 @@ class Document:
         )
         # Linia subțire dintre numere și text
         self.separator = tk.Frame(self.frame, width=1, bg="#c0c0c0")
-        # Același font ca zona de text (o copie, ca să-l putem măsura)
-        self.font = tkfont.Font(root=self.text_area, font=self.text_area.cget("font"))
         self._redraw_pending = False  # True = redesenarea e deja programată
 
         self.set_line_numbers(True)
@@ -122,6 +137,12 @@ class Document:
         else:
             self.gutter.pack_forget()
             self.separator.pack_forget()
+
+    def set_font_size(self, size):
+        """Zoom: schimbă mărimea fontului (textul și numerele de linie)."""
+        # Tkinter reașază singur textul (și rupe din nou rândurile, cu Word Wrap)
+        self.font.config(size=size)
+        self.schedule_line_numbers()  # lățimea coloanei și pozițiile numerelor
 
     def _on_yscroll(self, *args):
         """Textul s-a derulat: mutăm bara de derulare și redesenăm numerele."""

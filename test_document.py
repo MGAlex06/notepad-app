@@ -3,7 +3,15 @@ from datetime import datetime
 
 import pytest
 
-from document import Document, format_timestamp, gutter_width
+from document import (
+    DEFAULT_FONT_SIZE,
+    MAX_FONT_SIZE,
+    MIN_FONT_SIZE,
+    Document,
+    format_timestamp,
+    gutter_width,
+    next_font_size,
+)
 
 
 @pytest.fixture(scope="module")
@@ -212,3 +220,43 @@ def test_format_timestamp_single_digit_day_month():
 
 def test_format_timestamp_end_of_year():
     assert format_timestamp(datetime(2026, 12, 31, 23, 59)) == "23:59 31.12.2026"
+
+
+def test_next_font_size_step_up():
+    assert next_font_size(10, 1, 6, 40) == 11
+
+
+def test_next_font_size_step_down():
+    assert next_font_size(10, -1, 6, 40) == 9
+
+
+def test_next_font_size_stops_at_minimum():
+    assert next_font_size(6, -1, 6, 40) == 6
+
+
+def test_next_font_size_stops_at_maximum():
+    assert next_font_size(40, 1, 6, 40) == 40
+
+
+def test_next_font_size_back_to_default():
+    assert MIN_FONT_SIZE <= DEFAULT_FONT_SIZE <= MAX_FONT_SIZE
+
+    size = DEFAULT_FONT_SIZE
+    for step in (1, 1, 1, -1, -1, -1):
+        size = next_font_size(size, step, MIN_FONT_SIZE, MAX_FONT_SIZE)
+    assert size == DEFAULT_FONT_SIZE
+
+
+def test_set_font_size_changes_text_and_gutter(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "a\nb")
+    doc.text_area.edit_modified(False)
+
+    doc.set_font_size(20)
+
+    # Textul și numerele de linie folosesc același font, acum de 20
+    assert doc.text_area.cget("font") == str(doc.font)
+    assert doc.font.cget("size") == 20
+    # Zoom-ul nu atinge textul
+    assert doc.get_text() == "a\nb"
+    assert not doc.is_modified()
