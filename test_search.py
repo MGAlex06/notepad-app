@@ -1,4 +1,10 @@
-from search import find_next, find_next_wrap, is_match_at, replace_all
+from search import (
+    find_next,
+    find_next_wrap,
+    is_match_at,
+    parse_line_number,
+    replace_all,
+)
 
 
 def test_finds_first_match():
@@ -155,3 +161,43 @@ def test_replace_all_cursor_inside_match_goes_after_replacement():
     text, _, cursor = replace_all("mere și mere", "mere", "pere!", match_case=False, cursor=2)
     assert text == "pere! și pere!"
     assert cursor == 5
+
+
+def test_line_number_valid():
+    assert parse_line_number("3", 10) == 3
+
+
+def test_line_number_spaces_are_ignored():
+    assert parse_line_number(" 3 ", 10) == 3
+
+
+def test_line_number_first_line():
+    assert parse_line_number("1", 10) == 1
+
+
+def test_line_number_last_line():
+    assert parse_line_number("10", 10) == 10
+
+
+def test_line_number_zero_is_invalid():
+    assert parse_line_number("0", 10) is None
+
+
+def test_line_number_negative_is_invalid():
+    assert parse_line_number("-2", 10) is None
+
+
+def test_line_number_after_last_line_is_invalid():
+    assert parse_line_number("11", 10) is None
+
+
+def test_line_number_empty_is_invalid():
+    assert parse_line_number("", 10) is None
+
+
+def test_line_number_letters_are_invalid():
+    assert parse_line_number("abc", 10) is None
+
+
+def test_line_number_decimal_is_invalid():
+    assert parse_line_number("2.5", 10) is None

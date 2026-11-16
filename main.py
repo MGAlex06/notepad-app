@@ -10,7 +10,7 @@ from document import Document
 FILE_TYPES = [("Fișiere text", "*.txt"), ("Toate fișierele", "*.*")]
 
 # Scurtăturile care funcționează acum, afișate în Ajutor → Scurtături.
-# Primele șapte le legăm noi în add_tab; restul vin gata făcute din Tkinter.
+# Primele opt le legăm noi în add_tab; restul vin gata făcute din Tkinter.
 SHORTCUTS = [
     ("Ctrl+N", "Filă nouă"),
     ("Ctrl+W", "Închide fila"),
@@ -19,6 +19,7 @@ SHORTCUTS = [
     ("Ctrl+Shift+S", "Salvează ca"),
     ("Ctrl+F", "Caută"),
     ("Ctrl+H", "Înlocuiește"),
+    ("Ctrl+G", "Salt la linie"),
     ("Ctrl+Z", "Anulează"),
     ("Ctrl+Y", "Refă"),
     ("Ctrl+X", "Taie"),
@@ -383,6 +384,74 @@ def main():
         replace_find_entry.focus_set()
         return "break"
 
+    # Fereastra "Salt la linie" (None = nu e deschisă)
+    goto_window = None
+    goto_entry = None  # câmpul pentru numărul liniei
+
+    def open_goto_window(event=None):
+        nonlocal goto_window, goto_entry
+
+        # Dacă fereastra e deja deschisă, doar o aducem în față
+        if goto_window is not None:
+            goto_window.lift()
+            goto_entry.focus_set()
+            return "break"
+
+        goto_window = tk.Toplevel(root)
+        goto_window.title("Salt la linie")
+        goto_window.transient(root)  # stă mereu deasupra ferestrei principale
+        goto_window.resizable(False, False)
+
+        tk.Label(goto_window, text="Număr linie:").grid(row=0, column=0, padx=5, pady=5)
+        goto_entry = tk.Entry(goto_window, width=15)
+        goto_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        def close():
+            nonlocal goto_window, goto_entry
+            goto_window.destroy()
+            goto_window = None
+            goto_entry = None
+
+        def do_goto(event=None):
+            # Fila activă acum, la apăsarea lui "Salt"
+            text_area = current_doc().text_area
+            # "end-1c" = ultimul caracter real; partea dinainte de "." e numărul
+            # ultimei linii. Sunt linii adevărate (cele din bara de stare), nu
+            # rândurile de pe ecran, deci încadrarea textului nu contează.
+            line_count = int(text_area.index("end-1c").split(".")[0])
+
+            line = search.parse_line_number(goto_entry.get(), line_count)
+            if line is None:
+                messagebox.showinfo(
+                    "Notepad",
+                    f"Numărul liniei trebuie să fie între 1 și {line_count}.",
+                    parent=goto_window,
+                )
+                return
+
+            # Ștergem selecția veche, ca să nu rămână ceva selectat în alt loc
+            text_area.tag_remove("sel", "1.0", tk.END)
+            text_area.mark_set(tk.INSERT, f"{line}.0")  # coloana 0 = începutul liniei
+            text_area.see(f"{line}.0")  # derulăm ca linia să se vadă
+            update_status()
+            close()
+            text_area.focus_set()  # cursorul clipește în text, pe linia nouă
+
+        tk.Button(goto_window, text="Salt", command=do_goto).grid(
+            row=0, column=2, padx=5, pady=5, sticky="ew"
+        )
+        tk.Button(goto_window, text="Închide", command=close).grid(
+            row=1, column=2, padx=5, pady=5, sticky="ew"
+        )
+
+        # Enter în câmp face același lucru ca butonul "Salt"
+        goto_entry.bind("<Return>", do_goto)
+        # Butonul X din colț face același lucru ca "Închide"
+        goto_window.protocol("WM_DELETE_WINDOW", close)
+
+        goto_entry.focus_set()
+        return "break"
+
     def add_tab(doc):
         """Pune `doc` într-o filă nouă, îi leagă tastele și o face fila activă."""
         notebook.add(doc.frame, text=doc.display_name())
@@ -402,6 +471,8 @@ def main():
         text_area.bind("<Control-F>", open_find_window)
         text_area.bind("<Control-h>", open_replace_window)
         text_area.bind("<Control-H>", open_replace_window)
+        text_area.bind("<Control-g>", open_goto_window)
+        text_area.bind("<Control-G>", open_goto_window)
         text_area.bind("<Control-n>", new_tab)
         text_area.bind("<Control-N>", new_tab)
         text_area.bind("<Control-w>", close_tab)
@@ -573,6 +644,20 @@ def main():
         label="Save As...", command=save_as_shortcut, accelerator="Ctrl+Shift+S"
     )
     menubar.add_cascade(label="File", menu=file_menu)
+
+    # Meniul Editare: căutare, înlocuire și salt la linie.
+    # Folosim aceleași funcții ca scurtăturile din add_tab.
+    edit_menu = tk.Menu(menubar, tearoff=0)
+    edit_menu.add_command(
+        label="Caută...", command=open_find_window, accelerator="Ctrl+F"
+    )
+    edit_menu.add_command(
+        label="Înlocuiește...", command=open_replace_window, accelerator="Ctrl+H"
+    )
+    edit_menu.add_command(
+        label="Salt la linie...", command=open_goto_window, accelerator="Ctrl+G"
+    )
+    menubar.add_cascade(label="Editare", menu=edit_menu)
 
     # Meniul Codificare: alegi cu ce codificare se salvează fișierul.
     # Variabila butoanelor radio o setăm în on_tab_changed, pe documentul activ.

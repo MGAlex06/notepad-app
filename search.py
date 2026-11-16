@@ -84,3 +84,20 @@ def replace_all(text, query, replacement, match_case, cursor=0):
 
     pieces.append(text[start:])  # ce a rămas după ultima potrivire
     return "".join(pieces), count, new_cursor
+
+
+def parse_line_number(value, line_count):
+    """Transformă textul `value` (scris de utilizator) într-un număr de linie.
+
+    `line_count` este câte linii are documentul.
+    Returnează numărul liniei (int) dacă e un număr întreg între 1 și
+    `line_count`, altfel None.
+    """
+    try:
+        line = int(value.strip())  # " 5 " devine 5; "abc" sau "2.5" dau eroare
+    except ValueError:
+        return None
+
+    if line < 1 or line > line_count:
+        return None
+    return line
