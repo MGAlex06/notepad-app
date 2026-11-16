@@ -11,7 +11,7 @@ ANSI_CODEC = locale.getencoding()
 # care spune ce codificare are fișierul.
 ENCODINGS = {
     "UTF-8": ("utf-8", False),
-    "UTF-8 cu BOM": ("utf-8", True),
+    "UTF-8 BOM": ("utf-8", True),
     "UTF-16 LE": ("utf-16-le", True),
     "UTF-16 BE": ("utf-16-be", True),
     "ANSI": (ANSI_CODEC, False),
@@ -25,7 +25,7 @@ def detect_encoding(data):
     """Ghicește codificarea din octeții fișierului și returnează numele ei."""
     # 1. Întâi după BOM (primii octeți ai fișierului)
     if data.startswith(codecs.BOM_UTF8):
-        return "UTF-8 cu BOM"
+        return "UTF-8 BOM"
     if data.startswith(codecs.BOM_UTF16_LE):
         return "UTF-16 LE"
     if data.startswith(codecs.BOM_UTF16_BE):

@@ -67,7 +67,7 @@ def test_write_then_read_roundtrip(tmp_path, newline):
 @pytest.mark.parametrize(
     "data, expected",
     [
-        (b"\xef\xbb\xbfabc", "UTF-8 cu BOM"),
+        (b"\xef\xbb\xbfabc", "UTF-8 BOM"),
         (b"\xff\xfea\x00", "UTF-16 LE"),
         (b"\xfe\xff\x00a", "UTF-16 BE"),
         ("ăîșț".encode("utf-8"), "UTF-8"),
@@ -82,7 +82,7 @@ def test_detect_encoding(data, expected):
 @pytest.mark.parametrize(
     "data, expected_encoding",
     [
-        (b"\xef\xbb\xbfabc", "UTF-8 cu BOM"),
+        (b"\xef\xbb\xbfabc", "UTF-8 BOM"),
         (b"\xff\xfea\x00b\x00c\x00", "UTF-16 LE"),
         (b"\xfe\xff\x00a\x00b\x00c", "UTF-16 BE"),
     ],
@@ -122,7 +122,7 @@ def test_read_detects_crlf_in_utf16(tmp_path):
     "encoding, expected",
     [
         ("UTF-8", b"a\r\n"),
-        ("UTF-8 cu BOM", b"\xef\xbb\xbfa\r\n"),
+        ("UTF-8 BOM", b"\xef\xbb\xbfa\r\n"),
         ("UTF-16 LE", b"\xff\xfea\x00\r\x00\n\x00"),
         ("UTF-16 BE", b"\xfe\xff\x00a\x00\r\x00\n"),
         ("ANSI", b"a\r\n"),

@@ -48,14 +48,14 @@ def test_set_word_wrap(root):
 
 def test_load_reads_text_newline_and_encoding(root, tmp_path):
     path = tmp_path / "nota.txt"
-    path.write_bytes(b"\xef\xbb\xbfunu\r\ndoi")  # UTF-8 cu BOM, terminații Windows
+    path.write_bytes(b"\xef\xbb\xbfunu\r\ndoi")  # UTF-8 BOM, terminații Windows
 
     doc = Document(root)
     doc.load(path)
 
     assert doc.get_text() == "unu\ndoi"
     assert doc.newline == "\r\n"
-    assert doc.encoding.get() == "UTF-8 cu BOM"
+    assert doc.encoding.get() == "UTF-8 BOM"
     assert doc.path == path
     assert doc.display_name() == "nota.txt"
 
