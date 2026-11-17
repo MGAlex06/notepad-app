@@ -3,10 +3,16 @@ import tkinter.font as tkfont
 from pathlib import Path
 
 import file_io
+import markdown
 from strings import t
 
 # Spațiul liber (în pixeli) din stânga și din dreapta numerelor de linie
 GUTTER_PADDING = 6
+
+# Modul Markdown: pauza (ms) după ultima modificare înainte de recolorare
+MARKDOWN_DELAY_MS = 200
+# Peste atâtea caractere nu mai colorăm, ca interfața să nu se blocheze
+MARKDOWN_MAX_CHARS = 200_000
 
 # Mărimea fontului (în puncte) pentru zoom
 DEFAULT_FONT_SIZE = 10  # Courier New 10, ca fontul implicit al lui Tkinter
@@ -91,6 +97,16 @@ class Document:
                       "<<Redo>>", "<Configure>"):
             self.text_area.bind(event, self.schedule_line_numbers, add="+")
 
+        # Modul Markdown: colorăm textul cu etichete (tag-uri) Tkinter.
+        # Variabila Tkinter e a acestui document, ca bifa din View să arate
+        # starea filei active (la fel ca meniul Codificare).
+        self.markdown_mode = tk.BooleanVar(master=parent, value=False)
+        self._markdown_job = None  # recolorarea programată (None = niciuna)
+        self._setup_markdown_tags()
+        # Când se schimbă textul, recolorăm (după o scurtă pauză)
+        for event in ("<KeyPress>", "<<Paste>>", "<<Cut>>", "<<Undo>>", "<<Redo>>"):
+            self.text_area.bind(event, self.schedule_markdown, add="+")
+
         # Legăm barele de derulare de zona de text
         self.scrollbar.config(command=self.text_area.yview)
         self.xscrollbar.config(command=self.text_area.xview)
@@ -143,7 +159,90 @@ class Document:
         """Zoom: schimbă mărimea fontului (textul și numerele de linie)."""
         # Tkinter reașază singur textul (și rupe din nou rândurile, cu Word Wrap)
         self.font.config(size=size)
+        # Fonturile etichetelor Markdown cresc și ele, ca să rămână la fel de mari
+        self.bold_font.config(size=size)
+        self.italic_font.config(size=size)
         self.schedule_line_numbers()  # lățimea coloanei și pozițiile numerelor
+
+    def _setup_markdown_tags(self):
+        """Creează fonturile și etichetele (culorile) pentru modul Markdown."""
+        # Copii ale fontului textului, doar îngroșate sau înclinate
+        self.bold_font = self.font.copy()
+        self.bold_font.config(weight="bold")
+        self.italic_font = self.font.copy()
+        self.italic_font.config(slant="italic")
+
+        styles = {
+            "quote": {"foreground": "#6a737d"},
+            "list": {"foreground": "#b35c00"},
+            "link": {"foreground": "#0b6bcb", "underline": True},
+            "italic": {"font": self.italic_font},
+            "bold": {"font": self.bold_font},
+            "code": {"foreground": "#a31515", "background": "#f0f0f0"},
+            "heading": {"foreground": "#1f4e9c", "font": self.bold_font},
+            "code_block": {"foreground": "#a31515", "background": "#f0f0f0"},
+        }
+        # Eticheta creată mai târziu „câștigă” când două se suprapun,
+        # deci le creăm în ordinea din markdown.KINDS
+        for kind in markdown.KINDS:
+            self.text_area.tag_configure(f"md_{kind}", **styles[kind])
+        # Selecția trebuie să rămână vizibilă și peste fundalul codului
+        self.text_area.tag_raise("sel")
+
+    def schedule_markdown(self, event=None):
+        """Cere recolorarea peste MARKDOWN_DELAY_MS, nu la fiecare tastă.
+
+        Dacă mai vine o tastă înainte de termen, anulăm programarea veche
+        și o pornim din nou, deci colorăm o singură dată, după pauză.
+        """
+        self.cancel_markdown()
+        self._markdown_job = self.text_area.after(
+            MARKDOWN_DELAY_MS, self.apply_markdown
+        )
+
+    def cancel_markdown(self):
+        """Anulează recolorarea programată (de exemplu la închiderea filei)."""
+        if self._markdown_job is not None:
+            self.text_area.after_cancel(self._markdown_job)
+            self._markdown_job = None
+
+    def set_markdown(self, enabled):
+        """Pornește (True) sau oprește (False) modul Markdown și recolorează."""
+        self.markdown_mode.set(enabled)
+        self.apply_markdown()
+
+    def apply_markdown(self):
+        """Pune din nou culorile Markdown (sau le șterge, dacă modul e oprit).
+
+        Etichetele doar colorează: nu schimbă textul, nu intră în istoricul
+        Undo și nu pun steagul „modificat”.
+        """
+        self._markdown_job = None
+        # Fila a fost închisă între timp
+        if not self.text_area.winfo_exists():
+            return
+
+        # Ștergem culorile vechi
+        for kind in markdown.KINDS:
+            self.text_area.tag_remove(f"md_{kind}", "1.0", tk.END)
+
+        if not self.markdown_mode.get():
+            return
+        text = self.get_text()
+        if len(text) > MARKDOWN_MAX_CHARS:
+            return  # fișier prea mare: rămâne fără culori
+
+        lines = text.split("\n")
+        for span in markdown.find_spans(text):
+            # Coloanele vin numărate ca în Python; le traducem pentru Tkinter
+            # (un emoji ocupă două poziții în Tkinter, vezi markdown.tk_column)
+            start_col = markdown.tk_column(lines[span.start_line - 1], span.start_col)
+            end_col = markdown.tk_column(lines[span.end_line - 1], span.end_col)
+            self.text_area.tag_add(
+                f"md_{span.kind}",
+                f"{span.start_line}.{start_col}",
+                f"{span.end_line}.{end_col}",
+            )
 
     def _on_yscroll(self, *args):
         """Textul s-a derulat: mutăm bara de derulare și redesenăm numerele."""
@@ -226,6 +325,10 @@ class Document:
         # Textul tocmai a fost încărcat, deci nu are modificări nesalvate
         self.text_area.edit_modified(False)
         self.schedule_line_numbers()
+        # Un fișier .md / .markdown pornește singur modul Markdown
+        if markdown.is_markdown_path(path):
+            self.markdown_mode.set(True)
+        self.apply_markdown()  # culorile textului nou (sau ștergerea celor vechi)
 
     def save(self, path):
         """Salvează documentul în `path`, cu terminația și codificarea lui.
@@ -234,6 +337,12 @@ class Document:
         sau OSError (fișierul nu poate fi scris). În ambele cazuri `path` nu se schimbă.
         """
         file_io.write_file(path, self.get_text(), self.newline, self.encoding.get())
+        # Calea s-a schimbat? (Salvează ca, sau prima salvare a unei file noi)
+        path_changed = Path(path) != self.path
         self.path = Path(path)
         # Tot ce era în document e acum salvat pe disc
         self.text_area.edit_modified(False)
+        # Doar la o cale nouă .md pornim modul Markdown; o salvare obișnuită
+        # (Ctrl+S pe același fișier) nu schimbă bifa
+        if path_changed and markdown.is_markdown_path(path):
+            self.set_markdown(True)

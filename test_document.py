@@ -260,3 +260,109 @@ def test_set_font_size_changes_text_and_gutter(root):
     # Zoom-ul nu atinge textul
     assert doc.get_text() == "a\nb"
     assert not doc.is_modified()
+
+
+def tagged_text(doc, tag):
+    """Textul acoperit de fiecare zonă a etichetei `tag`."""
+    ranges = doc.text_area.tag_ranges(tag)
+    # tag_ranges dă început, sfârșit, început, sfârșit, ...
+    return [
+        doc.text_area.get(ranges[i], ranges[i + 1]) for i in range(0, len(ranges), 2)
+    ]
+
+
+def test_markdown_colors_after_emoji_are_not_shifted(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "a😀**b** și `c`")
+
+    doc.set_markdown(True)
+
+    assert tagged_text(doc, "md_bold") == ["**b**"]
+    assert tagged_text(doc, "md_code") == ["`c`"]
+
+
+def test_markdown_does_not_change_text_undo_or_modified(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "# Titlu\n- **x**")
+    doc.text_area.edit_reset()  # golim istoricul Undo
+    doc.text_area.edit_modified(False)
+
+    doc.set_markdown(True)
+
+    assert tagged_text(doc, "md_heading") == ["# Titlu"]
+    assert doc.get_text() == "# Titlu\n- **x**"
+    assert not doc.is_modified()
+    with pytest.raises(tk.TclError):
+        doc.text_area.edit_undo()  # nimic de anulat
+
+
+def test_markdown_off_removes_colors(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "**x**")
+    doc.set_markdown(True)
+
+    doc.set_markdown(False)
+
+    assert tagged_text(doc, "md_bold") == []
+
+
+def test_load_md_turns_markdown_on(root, tmp_path):
+    md_path = tmp_path / "nota.md"
+    md_path.write_bytes(b"# Titlu")
+    txt_path = tmp_path / "nota.txt"
+    txt_path.write_bytes(b"# Titlu")
+
+    md_doc = Document(root)
+    md_doc.load(md_path)
+    txt_doc = Document(root)
+    txt_doc.load(txt_path)
+
+    assert md_doc.markdown_mode.get()
+    assert tagged_text(md_doc, "md_heading") == ["# Titlu"]
+    assert not txt_doc.markdown_mode.get()
+    assert tagged_text(txt_doc, "md_heading") == []
+
+
+def test_save_as_md_turns_markdown_on(root, tmp_path):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "# Titlu")
+
+    doc.save(tmp_path / "nou.md")  # calea se schimbă: din nimic în .md
+
+    assert doc.markdown_mode.get()
+
+
+def test_plain_save_keeps_markdown_turned_off(root, tmp_path):
+    path = tmp_path / "nota.md"
+    path.write_bytes(b"# Titlu")
+    doc = Document(root)
+    doc.load(path)
+    doc.set_markdown(False)  # utilizatorul a oprit bifa
+
+    doc.save(path)  # Ctrl+S pe același fișier
+
+    assert not doc.markdown_mode.get()
+
+
+def test_apply_markdown_after_close_does_nothing(root):
+    doc = Document(root)
+    doc.text_area.insert("1.0", "**x**")
+    doc.markdown_mode.set(True)
+    doc.schedule_markdown()
+
+    doc.cancel_markdown()
+    doc.frame.destroy()
+    doc.apply_markdown()  # fila e închisă: nu trebuie să dea eroare
+
+    assert doc._markdown_job is None
+
+
+def test_set_font_size_changes_markdown_fonts(root):
+    doc = Document(root)
+
+    doc.set_font_size(20)
+
+    assert doc.bold_font.cget("size") == 20
+    assert doc.italic_font.cget("size") == 20
+    assert doc.bold_font.cget("weight") == "bold"
+    assert doc.italic_font.cget("slant") == "italic"

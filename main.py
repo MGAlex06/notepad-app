@@ -241,7 +241,9 @@ def main():
         text_area.edit_separator()
         text_area.config(autoseparators=True)
         # Textul s-a schimbat din cod, nu de la tastatură: redesenăm numerele
+        # și recolorăm Markdown-ul
         current_doc().schedule_line_numbers()
+        current_doc().schedule_markdown()
 
     def insert_timestamp(event=None):
         """F5: inserează data și ora la cursor (înlocuiește selecția, dacă există)."""
@@ -587,6 +589,7 @@ def main():
 
         del documents[str(doc.frame)]
         notebook.forget(doc.frame)
+        doc.cancel_markdown()  # recolorarea programată nu mai are ce colora
         doc.frame.destroy()
 
         # Aplicația rămâne mereu cu cel puțin o filă
@@ -650,6 +653,8 @@ def main():
         # Butoanele radio din Codificare arată acum codificarea acestui document
         for index in range(len(file_io.ENCODINGS)):
             encoding_menu.entryconfig(index, variable=doc.encoding)
+        # Bifa „Mod Markdown” arată starea acestui document
+        view_menu.entryconfig(markdown_menu_index, variable=doc.markdown_mode)
         doc.text_area.focus_set()
 
     def toggle_word_wrap():
@@ -662,6 +667,11 @@ def main():
         """View → Numere de linie: aplică noua setare tuturor filelor deschise."""
         for doc in documents.values():
             doc.set_line_numbers(line_numbers.get())
+
+    def toggle_markdown():
+        """View → Mod Markdown: recolorează doar fila activă."""
+        # Bifa a schimbat deja singură variabila documentului activ
+        current_doc().apply_markdown()
 
     def apply_font_size(size):
         """Ține minte noua mărime și o aplică tuturor filelor deschise."""
@@ -741,6 +751,8 @@ def main():
     # Le creăm în build_menus, ca să le putem reface la schimbarea limbii.
     menubar = None
     encoding_menu = None
+    view_menu = None  # are bifa „Mod Markdown”, care urmează fila activă
+    markdown_menu_index = None  # poziția acestei bife în view_menu
 
     def build_menus():
         """Construiește bara de meniuri în limba curentă (și o înlocuiește pe cea veche).
@@ -749,7 +761,7 @@ def main():
         afara meniului (word_wrap, line_numbers, language_var), deci starea lor
         se păstrează când refacem meniul.
         """
-        nonlocal menubar, encoding_menu
+        nonlocal menubar, encoding_menu, view_menu, markdown_menu_index
         old_menubar = menubar
 
         # `accelerator` doar afișează scurtătura în dreapta; tasta în sine
@@ -813,6 +825,15 @@ def main():
             label=t("menu.line_numbers"), variable=line_numbers,
             command=toggle_line_numbers,
         )
+        # Bifa Markdown e per filă: variabila ei e a documentului activ
+        view_menu.add_checkbutton(
+            label=t("menu.markdown"), command=toggle_markdown
+        )
+        markdown_menu_index = view_menu.index("end")  # ultima intrare adăugată
+        if notebook.select():
+            view_menu.entryconfig(
+                markdown_menu_index, variable=current_doc().markdown_mode
+            )
         zoom_menu = tk.Menu(view_menu, tearoff=0)
         zoom_menu.add_command(
             label=t("menu.zoom_in"), command=zoom_in, accelerator="Ctrl++"
