@@ -32,6 +32,12 @@ A Notepad-style text editor for Windows, written in Python with Tkinter.
 - Status bar with line, column, character count and encoding.
 - A list of keyboard shortcuts in the Help menu.
 
+### Markdown mode
+- Syntax highlighting for headings, bold and italic text, inline code and code blocks, links, list markers and quotes. Text inside a code block is not treated as Markdown.
+- Turns on automatically when a `.md` or `.markdown` file is opened, or when a file is saved under a new `.md` or `.markdown` name.
+- Can be turned on or off for the current tab from the View menu. The check mark follows the active tab.
+- The highlighting only colors the text: it does not change it, does not add Undo steps and does not mark the file as modified.
+
 ### Romanian and English interface
 - Every visible text comes from one module (`strings.py`), in Romanian and English.
 - The language is changed from Help > "Limbă / Language" and applies immediately, without a restart.
@@ -56,11 +62,12 @@ The app has no external runtime dependencies. It uses only the Python standard l
 | `document.py` | One tab: text area, line numbers and zoom, plus small helpers (`gutter_width`, `next_font_size`, `format_timestamp`). |
 | `file_io.py` | Reads and writes files, detects the encoding and keeps track of line endings. |
 | `search.py` | Find, replace all and line-number validation, working on plain strings. |
+| `markdown.py` | Finds the Markdown parts to highlight (headings, code, links, ...) in plain text, and converts columns for Tkinter. |
 | `session.py` | Saves and loads the session file. |
 | `strings.py` | All interface texts in Romanian and English, and the `t()` lookup function. |
 | `test_*.py` | pytest tests, one file per module. |
 
-The logic (`file_io`, `search`, `session`, `strings`) is kept separate from the interface (`main`, `document`). The logic modules do not import Tkinter, so they can be tested with plain inputs and outputs. `test_document.py` also covers a few interface details using a hidden Tkinter window.
+The logic (`file_io`, `search`, `session`, `strings`, `markdown`) is kept separate from the interface (`main`, `document`). The logic modules do not import Tkinter, so they can be tested with plain inputs and outputs. `test_document.py` also covers a few interface details using a hidden Tkinter window.
 
 ## Getting started
 
@@ -117,6 +124,7 @@ The app runs without Python installed. The folder was tested on a second Windows
 - **Safe saving.** The text is encoded in memory before the file is opened for writing. If a character does not fit the encoding, the file on disk is not touched.
 - **One undo step.** "Replace all", a single "Replace" and the F5 date insert each turn off Tkinter's automatic undo separators while they run, so one Ctrl+Z reverts the whole operation.
 - **Session in `%APPDATA%`.** The session is a small JSON file that is checked field by field when loaded. A damaged file is ignored, an unknown language falls back to Romanian, and files that no longer exist are skipped.
+- **Emoji and highlight positions.** Tk 8.6 counts a character outside the Basic Multilingual Plane, such as an emoji, as two positions (UTF-16), while Python counts it as one. `markdown.tk_column` converts each Python column to a Tk column before the colors are applied, so highlights after an emoji are not shifted.
 
 ## How it was built
 
@@ -140,7 +148,12 @@ This is a learning project. The code was written by Claude Code, Anthropic's AI 
 - Unsaved text is not kept in the session. Only tabs backed by a file on disk are restored.
 - UTF-16 files without a byte order mark are not detected. They open as UTF-8 or ANSI and show garbled text.
 - ANSI uses the system code page (for example cp1252, or cp1250 on Central European systems). The Romanian letters ș and ț (with comma below) do not exist in these code pages, and ă is also missing from cp1252. Saving such text in ANSI is refused with a message that suggests another encoding.
+- Markdown highlighting is skipped for documents longer than 200,000 characters, so typing stays responsive.
+- The Markdown highlighting is simple and works line by line. It does not cover tables, headings underlined with `===` or `---`, or bold and italic text that spans several lines.
 
-## Roadmap
+## Ideas
 
-- A Markdown mode.
+Possible additions, not commitments:
+
+- A formatted Markdown preview.
+- A dark theme.
