@@ -2,6 +2,8 @@
 
 A Notepad-style text editor for Windows, written in Python with Tkinter.
 
+**Download:** the latest Windows build is on the [Releases page](https://github.com/MGAlex06/notepad-app/releases/latest). Extract the zip and run `NotepadApp\NotepadApp.exe`.
+
 ## Features
 
 ### Files and encodings
