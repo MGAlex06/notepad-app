@@ -150,6 +150,7 @@ This is a learning project. The code was written by Claude Code, Anthropic's AI 
 - ANSI uses the system code page (for example cp1252, or cp1250 on Central European systems). The Romanian letters ș and ț (with comma below) do not exist in these code pages, and ă is also missing from cp1252. Saving such text in ANSI is refused with a message that suggests another encoding.
 - Markdown highlighting is skipped for documents longer than 200,000 characters, so typing stays responsive.
 - The Markdown highlighting is simple and works line by line. It does not cover tables, headings underlined with `===` or `---`, or bold and italic text that spans several lines.
+- The column shown in the status bar counts a character outside the Basic Multilingual Plane, such as an emoji, as two positions. Search and the character count are not affected.
 
 ## Ideas
 
