@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from markdown import Span, find_spans, is_markdown_path, tk_column
+from md_highlight import Span, find_spans, is_markdown_path, tk_column
 
 
 def test_plain_text_has_no_spans():

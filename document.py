@@ -3,7 +3,7 @@ import tkinter.font as tkfont
 from pathlib import Path
 
 import file_io
-import markdown
+import md_highlight
 from strings import t
 
 # Spațiul liber (în pixeli) din stânga și din dreapta numerelor de linie
@@ -183,8 +183,8 @@ class Document:
             "code_block": {"foreground": "#a31515", "background": "#f0f0f0"},
         }
         # Eticheta creată mai târziu „câștigă” când două se suprapun,
-        # deci le creăm în ordinea din markdown.KINDS
-        for kind in markdown.KINDS:
+        # deci le creăm în ordinea din md_highlight.KINDS
+        for kind in md_highlight.KINDS:
             self.text_area.tag_configure(f"md_{kind}", **styles[kind])
         # Selecția trebuie să rămână vizibilă și peste fundalul codului
         self.text_area.tag_raise("sel")
@@ -223,7 +223,7 @@ class Document:
             return
 
         # Ștergem culorile vechi
-        for kind in markdown.KINDS:
+        for kind in md_highlight.KINDS:
             self.text_area.tag_remove(f"md_{kind}", "1.0", tk.END)
 
         if not self.markdown_mode.get():
@@ -233,11 +233,11 @@ class Document:
             return  # fișier prea mare: rămâne fără culori
 
         lines = text.split("\n")
-        for span in markdown.find_spans(text):
+        for span in md_highlight.find_spans(text):
             # Coloanele vin numărate ca în Python; le traducem pentru Tkinter
-            # (un emoji ocupă două poziții în Tkinter, vezi markdown.tk_column)
-            start_col = markdown.tk_column(lines[span.start_line - 1], span.start_col)
-            end_col = markdown.tk_column(lines[span.end_line - 1], span.end_col)
+            # (un emoji ocupă două poziții în Tkinter, vezi md_highlight.tk_column)
+            start_col = md_highlight.tk_column(lines[span.start_line - 1], span.start_col)
+            end_col = md_highlight.tk_column(lines[span.end_line - 1], span.end_col)
             self.text_area.tag_add(
                 f"md_{span.kind}",
                 f"{span.start_line}.{start_col}",
@@ -326,7 +326,7 @@ class Document:
         self.text_area.edit_modified(False)
         self.schedule_line_numbers()
         # Un fișier .md / .markdown pornește singur modul Markdown
-        if markdown.is_markdown_path(path):
+        if md_highlight.is_markdown_path(path):
             self.markdown_mode.set(True)
         self.apply_markdown()  # culorile textului nou (sau ștergerea celor vechi)
 
@@ -344,5 +344,5 @@ class Document:
         self.text_area.edit_modified(False)
         # Doar la o cale nouă .md pornim modul Markdown; o salvare obișnuită
         # (Ctrl+S pe același fișier) nu schimbă bifa
-        if path_changed and markdown.is_markdown_path(path):
+        if path_changed and md_highlight.is_markdown_path(path):
             self.set_markdown(True)

@@ -62,12 +62,12 @@ The app has no external runtime dependencies. It uses only the Python standard l
 | `document.py` | One tab: text area, line numbers and zoom, plus small helpers (`gutter_width`, `next_font_size`, `format_timestamp`). |
 | `file_io.py` | Reads and writes files, detects the encoding and keeps track of line endings. |
 | `search.py` | Find, replace all and line-number validation, working on plain strings. |
-| `markdown.py` | Finds the Markdown parts to highlight (headings, code, links, ...) in plain text, and converts columns for Tkinter. |
+| `md_highlight.py` | Finds the Markdown parts to highlight (headings, code, links, ...) in plain text, and converts columns for Tkinter. |
 | `session.py` | Saves and loads the session file. |
 | `strings.py` | All interface texts in Romanian and English, and the `t()` lookup function. |
 | `test_*.py` | pytest tests, one file per module. |
 
-The logic (`file_io`, `search`, `session`, `strings`, `markdown`) is kept separate from the interface (`main`, `document`). The logic modules do not import Tkinter, so they can be tested with plain inputs and outputs. `test_document.py` also covers a few interface details using a hidden Tkinter window.
+The logic (`file_io`, `search`, `session`, `strings`, `md_highlight`) is kept separate from the interface (`main`, `document`). The logic modules do not import Tkinter, so they can be tested with plain inputs and outputs. `test_document.py` also covers a few interface details using a hidden Tkinter window.
 
 ## Getting started
 
@@ -124,7 +124,7 @@ The app runs without Python installed. The folder was tested on a second Windows
 - **Safe saving.** The text is encoded in memory before the file is opened for writing. If a character does not fit the encoding, the file on disk is not touched.
 - **One undo step.** "Replace all", a single "Replace" and the F5 date insert each turn off Tkinter's automatic undo separators while they run, so one Ctrl+Z reverts the whole operation.
 - **Session in `%APPDATA%`.** The session is a small JSON file that is checked field by field when loaded. A damaged file is ignored, an unknown language falls back to Romanian, and files that no longer exist are skipped.
-- **Emoji and highlight positions.** Tk 8.6 counts a character outside the Basic Multilingual Plane, such as an emoji, as two positions (UTF-16), while Python counts it as one. `markdown.tk_column` converts each Python column to a Tk column before the colors are applied, so highlights after an emoji are not shifted.
+- **Emoji and highlight positions.** Tk 8.6 counts a character outside the Basic Multilingual Plane, such as an emoji, as two positions (UTF-16), while Python counts it as one. `md_highlight.tk_column` converts each Python column to a Tk column before the colors are applied, so highlights after an emoji are not shifted.
 
 ## How it was built
 
